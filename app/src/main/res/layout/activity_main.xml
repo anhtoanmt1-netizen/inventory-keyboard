@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Inventory Scanner Keyboard"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvState"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:lineSpacingExtra="4dp"
+            android:textSize="16sp" />
+
+        <Button
+            android:id="@+id/btnCamPerm"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="1. Cấp quyền camera" />
+
+        <Button
+            android:id="@+id/btnEnable"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="2. Bật bàn phím trong Cài đặt" />
+
+        <Button
+            android:id="@+id/btnPick"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="3. Chọn bàn phím này để dùng" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="Cài đặt"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Chống quét trùng (ms)" />
+
+        <EditText
+            android:id="@+id/etDebounce"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="number" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Độ trễ giữa mã và Enter (ms)" />
+
+        <EditText
+            android:id="@+id/etEnterDelay"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="number" />
+
+        <CheckBox
+            android:id="@+id/cbEnter"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Tự động gửi Enter sau mỗi mã" />
+
+        <CheckBox
+            android:id="@+id/cbBeep"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Âm thanh" />
+
+        <CheckBox
+            android:id="@+id/cbVibrate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Rung" />
+
+        <CheckBox
+            android:id="@+id/cbAutoStart"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Tự bật camera khi bàn phím hiện lên" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="Ô thử nghiệm" />
+
+        <EditText
+            android:id="@+id/etTest"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Chạm vào đây, rồi quét mã bằng bàn phím"
+            android:imeOptions="actionDone"
+            android:inputType="text"
+            android:singleLine="true" />
+    </LinearLayout>
+</ScrollView>
