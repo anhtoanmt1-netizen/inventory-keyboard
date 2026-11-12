@@ -90,11 +90,15 @@ class MainActivity : Activity() {
 
     private fun refreshState() {
         val cam = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-        val enabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_INPUT_METHODS)
-            ?.contains(packageName) == true
-        val selected = Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
-            ?.contains(packageName) == true
-        fun mark(ok: Boolean) = if (ok) "✔" else "✘"
+        val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+        // Android 14 cấm đọc Settings.Secure.ENABLED_INPUT_METHODS nên hỏi trực tiếp InputMethodManager.
+        val enabled = imm.enabledInputMethodList.any { it.packageName == packageName }
+        // DEFAULT_INPUT_METHOD vẫn có thể bị chặn trên một số máy, nên bọc try/catch.
+        val selected: Boolean? = try {
+            Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
+                ?.contains(packageName) == true
+        } catch (_: Throwable) { null }
+        fun mark(ok: Boolean?) = when (ok) { true -> "✔"; false -> "✘"; null -> "?" }
         findViewById<TextView>(R.id.tvState).text =
             "${mark(cam)} Quyền camera\n${mark(enabled)} Bàn phím đã bật\n${mark(selected)} Đang dùng bàn phím này"
     }
