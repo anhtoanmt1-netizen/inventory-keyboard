@@ -8,6 +8,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # Tải font Montserrat vào assets (nếu bạn chưa tự thêm file app/src/main/assets/fonts/Montserrat.ttf)
+      - name: Download Montserrat font
+        run: |
+          mkdir -p app/src/main/assets/fonts
+          F=app/src/main/assets/fonts/Montserrat.ttf
+          if [ ! -s "$F" ]; then
+            curl -fL --retry 3 -o "$F" "https://github.com/google/fonts/raw/main/ofl/montserrat/Montserrat%5Bwght%5D.ttf" \
+            || curl -fL --retry 3 -o "$F" "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/montserrat/Montserrat%5Bwght%5D.ttf" \
+            || { rm -f "$F"; echo "::warning::Không tải được font Montserrat, ứng dụng sẽ dùng font mặc định"; }
+          fi
+          ls -la app/src/main/assets/fonts || true
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
