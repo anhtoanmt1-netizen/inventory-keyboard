@@ -12,15 +12,14 @@ import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
 import android.view.inputmethod.InputMethodManager
-import android.widget.Button
-import android.widget.CheckBox
+import android.widget.CompoundButton
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 
-/** Màn hình cài đặt: cấp quyền camera, bật bàn phím, chỉnh tùy chọn, ô thử nghiệm. */
+/** Màn hình cài đặt Keyboard Scan - SPX. */
 class MainActivity : Activity() {
 
     private var prefs: Prefs? = null
@@ -38,6 +37,7 @@ class MainActivity : Activity() {
         try {
             setContentView(R.layout.activity_main)
             setup()
+            Fonts.apply(window.decorView)
             ready = true
         } catch (e: Throwable) {
             showText("LỖI KHI MỞ MÀN HÌNH", Log.getStackTraceString(e), clearable = false)
@@ -47,22 +47,33 @@ class MainActivity : Activity() {
     private fun setup() {
         val p = Prefs(this)
         prefs = p
-        findViewById<Button>(R.id.btnCamPerm).setOnClickListener {
+        findViewById<TextView>(R.id.btnCamPerm).setOnClickListener {
             requestPermissions(arrayOf(Manifest.permission.CAMERA), 1)
         }
-        findViewById<Button>(R.id.btnEnable).setOnClickListener {
+        findViewById<TextView>(R.id.btnEnable).setOnClickListener {
             startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
         }
-        findViewById<Button>(R.id.btnPick).setOnClickListener {
+        findViewById<TextView>(R.id.btnPick).setOnClickListener {
             (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker()
         }
-        findViewById<EditText>(R.id.etDebounce).setText(p.debounceMs.toString())
-        findViewById<EditText>(R.id.etEnterDelay).setText(p.enterDelayMs.toString())
-        findViewById<CheckBox>(R.id.cbEnter).isChecked = p.sendEnter
-        findViewById<CheckBox>(R.id.cbBeep).isChecked = p.beep
-        findViewById<CheckBox>(R.id.cbVibrate).isChecked = p.vibrate
-        findViewById<CheckBox>(R.id.cbAutoStart).isChecked = p.autoStart
+        et(R.id.etDebounce).setText(p.debounceMs.toString())
+        et(R.id.etScanDelay).setText(p.scanDelayMs.toString())
+        et(R.id.etVibrateMs).setText(p.vibrateMs.toString())
+        et(R.id.etEnterDelay).setText(p.enterDelayMs.toString())
+        et(R.id.etDimPercent).setText(p.dimPercent.toString())
+        et(R.id.etCamHeight).setText(p.cameraHeightDp.toString())
+        sw(R.id.swEnter).isChecked = p.sendEnter
+        sw(R.id.swAutoStart).isChecked = p.autoStart
+        sw(R.id.swBeep).isChecked = p.beep
+        sw(R.id.swVibrate).isChecked = p.vibrate
+        sw(R.id.swKeepOn).isChecked = p.keepScreenOn
+        sw(R.id.swDim).isChecked = p.dimScreen
     }
+
+    private fun et(id: Int) = findViewById<EditText>(id)
+    private fun sw(id: Int) = findViewById<CompoundButton>(id)
+    private fun num(id: Int, def: Int, lo: Int, hi: Int) =
+        (et(id).text.toString().toIntOrNull() ?: def).coerceIn(lo, hi)
 
     override fun onResume() {
         super.onResume()
@@ -80,12 +91,18 @@ class MainActivity : Activity() {
 
     private fun saveSettings() {
         val p = prefs ?: return
-        p.debounceMs = (findViewById<EditText>(R.id.etDebounce).text.toString().toIntOrNull() ?: 1200).coerceIn(300, 10000)
-        p.enterDelayMs = (findViewById<EditText>(R.id.etEnterDelay).text.toString().toIntOrNull() ?: 60).coerceIn(0, 1000)
-        p.sendEnter = findViewById<CheckBox>(R.id.cbEnter).isChecked
-        p.beep = findViewById<CheckBox>(R.id.cbBeep).isChecked
-        p.vibrate = findViewById<CheckBox>(R.id.cbVibrate).isChecked
-        p.autoStart = findViewById<CheckBox>(R.id.cbAutoStart).isChecked
+        p.debounceMs = num(R.id.etDebounce, 1200, 300, 10000)
+        p.scanDelayMs = num(R.id.etScanDelay, 400, 0, 5000)
+        p.vibrateMs = num(R.id.etVibrateMs, 150, 0, 2000)
+        p.enterDelayMs = num(R.id.etEnterDelay, 60, 0, 1000)
+        p.dimPercent = num(R.id.etDimPercent, 50, 5, 100)
+        p.cameraHeightDp = num(R.id.etCamHeight, 228, 120, 420)
+        p.sendEnter = sw(R.id.swEnter).isChecked
+        p.autoStart = sw(R.id.swAutoStart).isChecked
+        p.beep = sw(R.id.swBeep).isChecked
+        p.vibrate = sw(R.id.swVibrate).isChecked
+        p.keepScreenOn = sw(R.id.swKeepOn).isChecked
+        p.dimScreen = sw(R.id.swDim).isChecked
     }
 
     private fun refreshState() {
@@ -93,7 +110,6 @@ class MainActivity : Activity() {
         val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
         // Android 14 cấm đọc Settings.Secure.ENABLED_INPUT_METHODS nên hỏi trực tiếp InputMethodManager.
         val enabled = imm.enabledInputMethodList.any { it.packageName == packageName }
-        // DEFAULT_INPUT_METHOD vẫn có thể bị chặn trên một số máy, nên bọc try/catch.
         val selected: Boolean? = try {
             Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
                 ?.contains(packageName) == true
@@ -107,15 +123,15 @@ class MainActivity : Activity() {
     private fun showText(title: String, body: String, clearable: Boolean) {
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(32, 48, 32, 32) }
         box.addView(TextView(this).apply { text = title; textSize = 18f; setTypeface(null, Typeface.BOLD) })
-        box.addView(Button(this).apply {
-            text = "SAO CHÉP NỘI DUNG LỖI"
+        box.addView(TextView(this).apply {
+            text = "SAO CHÉP NỘI DUNG LỖI"; textSize = 15f; setPadding(0, 32, 0, 32)
             setOnClickListener {
                 (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager)
                     .setPrimaryClip(ClipData.newPlainText("loi", body))
             }
         })
-        if (clearable) box.addView(Button(this).apply {
-            text = "XÓA LỖI VÀ MỞ LẠI ỨNG DỤNG"
+        if (clearable) box.addView(TextView(this).apply {
+            text = "XÓA LỖI VÀ MỞ LẠI ỨNG DỤNG"; textSize = 15f; setPadding(0, 16, 0, 32)
             setOnClickListener {
                 getSharedPreferences("crash", Context.MODE_PRIVATE).edit().clear().commit()
                 recreate()

@@ -2,72 +2,238 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="#101216"
-    android:orientation="vertical">
+    android:background="@color/bg"
+    android:orientation="vertical"
+    android:paddingBottom="6dp">
 
-    <FrameLayout
-        android:layout_width="match_parent"
-        android:layout_height="190dp"
-        android:background="#000000">
-
-        <androidx.camera.view.PreviewView
-            android:id="@+id/previewView"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent" />
-
-        <TextView
-            android:id="@+id/tvStatus"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom"
-            android:background="#99000000"
-            android:padding="6dp"
-            android:text="Camera tắt"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp" />
-    </FrameLayout>
-
+    <!-- Thanh chọn chế độ -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="56dp"
+        android:layout_height="46dp"
         android:orientation="horizontal"
-        android:padding="4dp">
+        android:padding="5dp">
 
-        <Button
-            android:id="@+id/btnCam"
+        <TextView
+            android:id="@+id/tabScan"
+            style="@style/KbTab"
             android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:layout_weight="2"
-            android:text="CAMERA"
-            android:textSize="13sp" />
-
-        <Button
-            android:id="@+id/btnTorch"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1.4"
-            android:text="FLASH"
-            android:textSize="13sp" />
-
-        <Button
-            android:id="@+id/btnDel"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
+            android:layout_marginEnd="5dp"
             android:layout_weight="1"
-            android:text="⌫" />
+            android:text="QUÉT" />
 
-        <Button
-            android:id="@+id/btnEnter"
+        <TextView
+            android:id="@+id/tabType"
+            style="@style/KbTab"
             android:layout_width="0dp"
             android:layout_height="match_parent"
+            android:layout_marginEnd="5dp"
             android:layout_weight="1"
-            android:text="↵" />
+            android:text="GÕ PHÍM" />
 
-        <Button
-            android:id="@+id/btnSwitch"
-            android:layout_width="0dp"
+        <TextView
+            android:id="@+id/btnHide"
+            style="@style/KbBtn"
+            android:layout_width="52dp"
             android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:text="⌨" />
+            android:text="▼" />
     </LinearLayout>
+
+    <!-- MÀN HÌNH QUÉT -->
+    <LinearLayout
+        android:id="@+id/panelScan"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <FrameLayout
+            android:id="@+id/cameraBox"
+            android:layout_width="match_parent"
+            android:layout_height="228dp"
+            android:layout_marginStart="6dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/bg_camera"
+            android:clipToOutline="true">
+
+            <androidx.camera.view.PreviewView
+                android:id="@+id/previewView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+            <com.inventory.scannerkeyboard.ScanOverlayView
+                android:id="@+id/overlay"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+            <!-- Logo góc trên bên trái -->
+            <ImageView
+                android:id="@+id/imgLogo"
+                android:layout_width="wrap_content"
+                android:layout_height="30dp"
+                android:layout_margin="8dp"
+                android:adjustViewBounds="true"
+                android:background="@drawable/bg_pill"
+                android:contentDescription="SPX Express"
+                android:paddingStart="8dp"
+                android:paddingTop="5dp"
+                android:paddingEnd="8dp"
+                android:paddingBottom="5dp"
+                android:src="@drawable/logo_spx" />
+
+            <!-- Gợi ý chức năng (hiện khi giữ lâu một nút) -->
+            <TextView
+                android:id="@+id/tvHint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top"
+                android:layout_marginStart="10dp"
+                android:layout_marginTop="46dp"
+                android:layout_marginEnd="10dp"
+                android:background="@drawable/bg_pill"
+                android:padding="8dp"
+                android:textColor="@color/text"
+                android:textSize="12sp"
+                android:visibility="gone" />
+
+            <!-- Trạng thái / kết quả -->
+            <TextView
+                android:id="@+id/tvStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|center_horizontal"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_pill"
+                android:maxWidth="320dp"
+                android:paddingStart="12dp"
+                android:paddingTop="6dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="6dp"
+                android:text="Giữ lâu một nút để xem hướng dẫn"
+                android:textColor="@color/text"
+                android:textSize="12sp" />
+        </FrameLayout>
+
+        <!-- Tay nắm kéo chỉnh chiều cao khung quét -->
+        <FrameLayout
+            android:id="@+id/dragHandle"
+            android:layout_width="match_parent"
+            android:layout_height="26dp">
+
+            <View
+                android:layout_width="46dp"
+                android:layout_height="5dp"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_handle" />
+        </FrameLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:orientation="horizontal"
+            android:paddingStart="5dp"
+            android:paddingEnd="5dp">
+
+            <TextView
+                android:id="@+id/btnCam"
+                style="@style/KbToggle"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="3dp"
+                android:layout_marginEnd="3dp"
+                android:layout_weight="2.4"
+                android:text="BẬT CAMERA" />
+
+            <TextView
+                android:id="@+id/btnDel"
+                style="@style/KbBtn"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="3dp"
+                android:layout_marginEnd="3dp"
+                android:layout_weight="1"
+                android:text="⌫"
+                android:textSize="18sp" />
+
+            <TextView
+                android:id="@+id/btnEnter"
+                style="@style/KbBtn"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="3dp"
+                android:layout_marginEnd="3dp"
+                android:layout_weight="1"
+                android:text="↵"
+                android:textSize="18sp" />
+
+            <TextView
+                android:id="@+id/btnSwitch"
+                style="@style/KbBtn"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="3dp"
+                android:layout_marginEnd="3dp"
+                android:layout_weight="1"
+                android:text="🌐"
+                android:textSize="18sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:orientation="horizontal"
+            android:paddingStart="5dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="5dp">
+
+            <TextView
+                android:id="@+id/chipFlash"
+                style="@style/KbChip"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="3dp"
+                android:layout_marginEnd="3dp"
+                android:layout_weight="1"
+                android:text="FLASH" />
+
+            <TextView
+                android:id="@+id/chipKeepOn"
+                style="@style/KbChip"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="3dp"
+                android:layout_marginEnd="3dp"
+                android:layout_weight="1.2"
+                android:text="LUÔN SÁNG" />
+
+            <TextView
+                android:id="@+id/chipDim"
+                style="@style/KbChip"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="3dp"
+                android:layout_marginEnd="3dp"
+                android:layout_weight="1.2"
+                android:text="GIẢM SÁNG" />
+
+            <TextView
+                android:id="@+id/chipAutoEnter"
+                style="@style/KbChip"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="3dp"
+                android:layout_marginEnd="3dp"
+                android:layout_weight="1.1"
+                android:text="TỰ ENTER" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- BÀN PHÍM GÕ (các phím được tạo bằng code) -->
+    <LinearLayout
+        android:id="@+id/panelType"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="2dp"
+        android:paddingEnd="2dp"
+        android:visibility="gone" />
 </LinearLayout>

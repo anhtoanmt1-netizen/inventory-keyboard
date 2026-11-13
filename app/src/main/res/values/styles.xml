@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:statusBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:colorControlActivated">@color/accent</item>
+        <item name="android:textColorPrimary">@color/text</item>
+    </style>
+
+    <!-- Nút / phím trên bàn phím -->
+    <style name="KbBtn">
+        <item name="android:background">@drawable/bg_key_special</item>
+        <item name="android:textColor">@color/text</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:gravity">center</item>
+        <item name="android:clickable">true</item>
+        <item name="android:singleLine">true</item>
+    </style>
+    <style name="KbToggle" parent="KbBtn">
+        <item name="android:background">@drawable/bg_toggle</item>
+    </style>
+    <style name="KbChip" parent="KbToggle">
+        <item name="android:textSize">11sp</item>
+    </style>
+    <style name="KbTab" parent="KbToggle">
+        <item name="android:textSize">14sp</item>
+    </style>
+
+    <!-- Màn hình cài đặt -->
+    <style name="SectionTitle">
+        <item name="android:textColor">@color/accent</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.08</item>
+    </style>
+    <style name="SettingTitle">
+        <item name="android:textColor">@color/text</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+    <style name="SettingDesc">
+        <item name="android:textColor">@color/muted</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:layout_marginTop">2dp</item>
+    </style>
+    <style name="SettingInput">
+        <item name="android:background">@drawable/bg_input</item>
+        <item name="android:textColor">@color/text</item>
+        <item name="android:textColorHint">@color/muted</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:padding">12dp</item>
+        <item name="android:layout_marginTop">8dp</item>
+    </style>
+    <style name="BtnPrimary">
+        <item name="android:background">@drawable/bg_btn_primary</item>
+        <item name="android:textColor">#FFFFFF</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:gravity">center</item>
+        <item name="android:clickable">true</item>
+    </style>
+    <style name="BtnSecondary" parent="BtnPrimary">
+        <item name="android:background">@drawable/bg_btn_secondary</item>
+    </style>
+</resources>
