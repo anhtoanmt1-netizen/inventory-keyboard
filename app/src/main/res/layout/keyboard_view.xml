@@ -1,0 +1,273 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/bg"
+    android:orientation="vertical"
+    android:paddingBottom="4dp">
+
+    <!-- Thanh kéo chỉnh chiều cao (trên cùng): chế độ QUÉT chỉnh khung camera, chế độ GÕ PHÍM chỉnh độ cao phím -->
+    <FrameLayout
+        android:id="@+id/dragHandle"
+        android:layout_width="match_parent"
+        android:layout_height="26dp">
+
+        <View
+            android:layout_width="52dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center"
+            android:background="@drawable/bg_handle" />
+    </FrameLayout>
+
+    <!-- Hàng trên: QUÉT / GÕ PHÍM / ẨN (chỉ biểu tượng, 3 nút bằng nhau) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:orientation="horizontal"
+        android:paddingStart="5dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="5dp"
+        android:paddingBottom="4dp">
+            <ImageView
+                android:id="@+id/tabScan"
+                style="@style/KbIconToggle"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="3dp"
+                android:layout_marginEnd="3dp"
+                android:layout_weight="1"
+                android:contentDescription="tabScan"
+                android:src="@drawable/ic_scan" />
+            <ImageView
+                android:id="@+id/tabType"
+                style="@style/KbIconToggle"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="3dp"
+                android:layout_marginEnd="3dp"
+                android:layout_weight="1"
+                android:contentDescription="tabType"
+                android:src="@drawable/ic_keyboard" />
+            <ImageView
+                android:id="@+id/tabClip"
+                style="@style/KbIconToggle"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="3dp"
+                android:layout_marginEnd="3dp"
+                android:layout_weight="1"
+                android:contentDescription="tabClip"
+                android:src="@drawable/ic_clipboard" />
+            <ImageView
+                android:id="@+id/btnHide"
+                style="@style/KbIcon"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="3dp"
+                android:layout_marginEnd="3dp"
+                android:layout_weight="1"
+                android:contentDescription="btnHide"
+                android:src="@drawable/ic_chevron_down" />
+    </LinearLayout>
+
+    <!-- MÀN HÌNH QUÉT -->
+    <LinearLayout
+        android:id="@+id/panelScan"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <FrameLayout
+            android:id="@+id/cameraBox"
+            android:layout_width="match_parent"
+            android:layout_height="228dp"
+            android:layout_marginStart="6dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/bg_camera"
+            android:clipToOutline="true">
+
+            <androidx.camera.view.PreviewView
+                android:id="@+id/previewView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+            <com.inventory.scannerkeyboard.ScanOverlayView
+                android:id="@+id/overlay"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+            <ImageView
+                android:id="@+id/imgLogo"
+                android:layout_width="wrap_content"
+                android:layout_height="30dp"
+                android:layout_margin="8dp"
+                android:adjustViewBounds="true"
+                android:background="@null"
+                android:contentDescription="SPX Express"
+                android:src="@drawable/logo_spx" />
+
+            <TextView
+                android:id="@+id/tvHint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top"
+                android:layout_marginStart="10dp"
+                android:layout_marginTop="46dp"
+                android:layout_marginEnd="10dp"
+                android:background="@drawable/bg_pill"
+                android:padding="8dp"
+                android:textColor="@color/text"
+                android:textSize="12sp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/tvStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|center_horizontal"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_pill"
+                android:maxWidth="320dp"
+                android:paddingStart="12dp"
+                android:paddingTop="6dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="6dp"
+                android:text="Giữ lâu một biểu tượng để xem hướng dẫn"
+                android:textColor="@color/text"
+                android:textSize="12sp" />
+
+            <!-- Danh sách tính năng (mở ra từ biểu tượng công cụ ở hàng dưới) -->
+            <LinearLayout
+                android:id="@+id/flyout"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|start"
+                android:layout_margin="8dp"
+                android:background="@drawable/bg_flyout"
+                android:orientation="horizontal"
+                android:padding="6dp"
+                android:visibility="gone">
+                <ImageView
+                    android:id="@+id/fCam"
+                    style="@style/KbIconToggle"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="3dp"
+                    android:layout_marginEnd="3dp"
+                    android:contentDescription="fCam"
+                    android:src="@drawable/ic_camera" />
+                <ImageView
+                    android:id="@+id/fFlash"
+                    style="@style/KbIconToggle"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="3dp"
+                    android:layout_marginEnd="3dp"
+                    android:contentDescription="fFlash"
+                    android:src="@drawable/ic_flash" />
+                <ImageView
+                    android:id="@+id/fKeepOn"
+                    style="@style/KbIconToggle"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="3dp"
+                    android:layout_marginEnd="3dp"
+                    android:contentDescription="fKeepOn"
+                    android:src="@drawable/ic_sun" />
+                <ImageView
+                    android:id="@+id/fDim"
+                    style="@style/KbIconToggle"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="3dp"
+                    android:layout_marginEnd="3dp"
+                    android:contentDescription="fDim"
+                    android:src="@drawable/ic_moon" />
+                <ImageView
+                    android:id="@+id/fAutoEnter"
+                    style="@style/KbIconToggle"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="3dp"
+                    android:layout_marginEnd="3dp"
+                    android:contentDescription="fAutoEnter"
+                    android:src="@drawable/ic_enter_auto" />
+            </LinearLayout>
+        </FrameLayout>
+
+        <Space android:layout_width="match_parent" android:layout_height="6dp" />
+
+        <!-- Hàng nút chức năng dưới: được dựng bằng code theo bố cục người dùng chọn (Tùy chỉnh nút Scan) -->
+        <LinearLayout
+            android:id="@+id/btnArea"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </LinearLayout>
+
+    <!-- Thanh tìm kiếm Clipboard (hiện khi đang gõ từ khóa bằng bàn phím bên dưới) -->
+    <LinearLayout
+        android:id="@+id/searchBar"
+        android:layout_width="match_parent"
+        android:layout_height="46dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:visibility="gone">
+        <TextView
+            android:id="@+id/tvSearch"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginTop="3dp"
+            android:layout_marginBottom="3dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_input"
+            android:gravity="center_vertical"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:singleLine="true"
+            android:ellipsize="start"
+            android:textColor="@color/text"
+            android:textColorHint="@color/muted"
+            android:textSize="15sp" />
+        <TextView
+            android:id="@+id/btnSearchDone"
+            style="@style/BtnPrimary"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_marginStart="6dp"
+            android:layout_marginTop="3dp"
+            android:layout_marginBottom="3dp"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
+            android:text="Xong" />
+    </LinearLayout>
+
+    <!-- BÀN PHÍM GÕ (các phím được tạo bằng code) -->
+    <LinearLayout
+        android:id="@+id/panelType"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="2dp"
+        android:paddingEnd="2dp"
+        android:visibility="gone" />
+
+    <!-- BẢNG CLIPBOARD (dựng bằng code) -->
+    <FrameLayout
+        android:id="@+id/panelClip"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone" />
+
+    <!-- Hàng cuối cùng: tên người tạo -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:gravity="center"
+        android:text="Created by: Toan.nguyenanh@spxexpress.com"
+        android:textColor="#EE4D2D"
+        android:textSize="10sp" />
+</LinearLayout>

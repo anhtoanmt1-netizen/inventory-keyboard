@@ -1,0 +1,59 @@
+package com.inventory.scannerkeyboard
+
+import android.content.Context
+
+/** Cài đặt dùng chung giữa màn hình cài đặt (MainActivity) và bàn phím (Service). */
+class Prefs(context: Context) {
+    private val sp = context.applicationContext
+        .getSharedPreferences("scanner_prefs", Context.MODE_PRIVATE)
+
+    private fun getI(k: String, d: Int) = sp.getInt(k, d)
+    private fun putI(k: String, v: Int) = sp.edit().putInt(k, v).apply()
+    private fun getB(k: String, d: Boolean) = sp.getBoolean(k, d)
+    private fun putB(k: String, v: Boolean) = sp.edit().putBoolean(k, v).apply()
+
+    /** Chống quét trùng: cùng mã chỉ nhận lại sau khi vắng mặt lâu hơn giá trị này (ms). */
+    var debounceMs: Int get() = getI("debounce", 1200); set(v) = putI("debounce", v)
+
+    /** Độ nhạy: thời gian chờ SAU khi rung xong rồi mới quét mã tiếp (ms). */
+    var scanDelayMs: Int get() = getI("scanDelay", 400); set(v) = putI("scanDelay", v)
+
+    /** Độ dài nhịp rung khi quét thành công (ms). */
+    var vibrateMs: Int get() = getI("vibrateMs", 150); set(v) = putI("vibrateMs", v)
+
+    /** Độ trễ giữa lúc chèn mã và lúc gửi Enter (ms). */
+    var enterDelayMs: Int get() = getI("enterDelay", 60); set(v) = putI("enterDelay", v)
+
+    var sendEnter: Boolean get() = getB("sendEnter", true); set(v) = putB("sendEnter", v)
+    var beep: Boolean get() = getB("beep", true); set(v) = putB("beep", v)
+    var vibrate: Boolean get() = getB("vibrate", true); set(v) = putB("vibrate", v)
+    var autoStart: Boolean get() = getB("autoStart", true); set(v) = putB("autoStart", v)
+
+    var keepScreenOn: Boolean get() = getB("keepOn", true); set(v) = putB("keepOn", v)
+    var dimScreen: Boolean get() = getB("dim", false); set(v) = putB("dim", v)
+    var dimPercent: Int get() = getI("dimPercent", 50); set(v) = putI("dimPercent", v)
+
+    /** Chiều cao khung camera (dp). Mặc định 228 = 190 x 1.2. */
+    var cameraHeightDp: Int get() = getI("camHeight", 228); set(v) = putI("camHeight", v)
+
+    /** Tự tắt camera nếu quá số giây này không quét được mã nào (0 = không bao giờ). */
+    var idleOffSec: Int get() = getI("idleOff", 0); set(v) = putI("idleOff", v)
+
+    /** Chiều cao mỗi hàng phím của bàn phím gõ (dp). Kéo thanh trên cùng ở chế độ GÕ PHÍM để đổi. */
+    var keyRowDp: Int get() = getI("keyRowDp", 50); set(v) = putI("keyRowDp", v)
+
+    /** Âm thanh khi gõ phím. */
+    var keySound: Boolean get() = getB("keySound", true); set(v) = putB("keySound", v)
+    var keySoundType: Int get() = getI("keySoundType", 0); set(v) = putI("keySoundType", v)
+    var keySoundVolume: Int get() = getI("keySoundVol", 60); set(v) = putI("keySoundVol", v)
+
+    /** Rung nhẹ khi chạm / gõ phím (Haptic Feedback) và cường độ rung 1..100. */
+    var keyHaptic: Boolean get() = getB("keyHaptic", true); set(v) = putB("keyHaptic", v)
+    var keyHapticStrength: Int get() = getI("keyHapticStrength", 40); set(v) = putI("keyHapticStrength", v)
+
+    /** Chiều cao vùng danh sách Clipboard (dp). Kéo thanh trên cùng ở bảng Clipboard để đổi. */
+    var clipHeightDp: Int get() = getI("clipHeightDp", 230); set(v) = putI("clipHeightDp", v)
+
+    /** Bố cục các nút ở hàng dưới của bảng Scan (JSON, xem ScanLayout). Rỗng = mặc định. */
+    var scanLayoutJson: String get() = sp.getString("scanLayout", "") ?: ""; set(v) { sp.edit().putString("scanLayout", v).apply() }
+}
