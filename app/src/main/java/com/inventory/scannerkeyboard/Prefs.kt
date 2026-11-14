@@ -46,4 +46,7 @@ class Prefs(context: Context) {
     var keySound: Boolean get() = getB("keySound", true); set(v) = putB("keySound", v)
     var keySoundType: Int get() = getI("keySoundType", 0); set(v) = putI("keySoundType", v)
     var keySoundVolume: Int get() = getI("keySoundVol", 60); set(v) = putI("keySoundVol", v)
+
+    /** Chiều cao vùng danh sách Clipboard (dp). Kéo thanh trên cùng ở bảng Clipboard để đổi. */
+    var clipHeightDp: Int get() = getI("clipHeightDp", 230); set(v) = putI("clipHeightDp", v)
 }

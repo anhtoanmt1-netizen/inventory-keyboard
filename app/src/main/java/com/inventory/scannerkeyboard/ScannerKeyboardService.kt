@@ -2,6 +2,9 @@ package com.inventory.scannerkeyboard
 
 import android.Manifest
 import android.content.BroadcastReceiver
+import android.content.ClipData
+import android.content.ClipDescription
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -9,6 +12,7 @@ import android.content.pm.PackageManager
 import android.inputmethodservice.InputMethodService
 import android.media.AudioManager
 import android.media.ToneGenerator
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -23,6 +27,12 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
 import android.view.inputmethod.InputMethodManager
+import android.widget.FrameLayout
+import android.widget.Toast
+import androidx.core.content.FileProvider
+import androidx.core.view.inputmethod.EditorInfoCompat
+import androidx.core.view.inputmethod.InputConnectionCompat
+import androidx.core.view.inputmethod.InputContentInfoCompat
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Space
@@ -63,6 +73,10 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     private lateinit var tvHint: TextView
     private lateinit var tabScan: ImageView
     private lateinit var tabType: ImageView
+    private lateinit var tabClip: ImageView
+    private lateinit var panelClipHost: FrameLayout
+    private lateinit var searchBar: View
+    private lateinit var tvSearch: TextView
     private lateinit var panelScan: View
     private lateinit var panelType: LinearLayout
     private lateinit var btnTools: ImageView
@@ -90,7 +104,9 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     private var lastActivity = 0L                    // lần quét / bật camera gần nhất (cho tự tắt khi rảnh)
     private var tone: ToneGenerator? = null
 
-    private var mode = 0        // 0 = QUÉT, 1 = GÕ PHÍM
+    private var mode = 0        // 0 = QUÉT, 1 = GÕ PHÍM, 2 = CLIPBOARD
+    private var searchActive = false   // đang gõ từ khóa tìm kiếm Clipboard bằng bàn phím
+    private var searchText = ""
     private var layer = 0       // 0 chữ, 1 ký hiệu, 2 ký hiệu phụ
     private var shift = 0       // 0 thường, 1 hoa một lần, 2 CAPS LOCK
     private val letterKeys = ArrayList<Pair<TextView, Char>>()
@@ -143,6 +159,8 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
 
     private val KEY_ROW_MIN = 36
     private val KEY_ROW_MAX = 72
+    private val CLIP_MIN = 120
+    private val CLIP_MAX = 420
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -151,11 +169,142 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         registry.currentState = Lifecycle.State.CREATED
         prefs = Prefs(this)
         vn = true
+        clipStore = ClipStore(this)
+        try {
+            clipMgr = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+            clipMgr?.addPrimaryClipChangedListener(clipListener)
+        } catch (_: Throwable) { }
         try {
             val f = IntentFilter().apply { addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_USER_PRESENT) }
             ContextCompat.registerReceiver(this, screenReceiver, f, ContextCompat.RECEIVER_NOT_EXPORTED)
         } catch (_: Throwable) { }
     }
+
+    // =====================================================================
+    //  CLIPBOARD
+    // =====================================================================
+    private lateinit var clipStore: ClipStore
+    private var clipPanel: ClipPanel? = null
+    private var clipMgr: ClipboardManager? = null
+    private var ignoreClipUntil = 0L
+    private var lastImageUri = ""
+    private var lastTextSig = ""
+    private val ioExec: ExecutorService = Executors.newSingleThreadExecutor()
+    private val clipListener = ClipboardManager.OnPrimaryClipChangedListener { ingestClipboard() }
+
+    /** Đọc nội dung vừa sao chép (văn bản hoặc hình ảnh) và lưu vào kho Clipboard. */
+    private fun ingestClipboard(fromShow: Boolean = false) {
+        if (SystemClock.elapsedRealtime() < ignoreClipUntil) return
+        val mgr = clipMgr ?: return
+        try {
+            val clip = mgr.primaryClip ?: return
+            if (clip.itemCount == 0) return
+            val desc = clip.description
+            if (Build.VERSION.SDK_INT >= 33 && desc?.extras?.getBoolean("android.content.extra.IS_SENSITIVE") == true) return
+            val item = clip.getItemAt(0)
+            val uri = item.uri
+            if (uri != null && desc != null && desc.hasMimeType("image/*")) {
+                val key = uri.toString()
+                if (key == lastImageUri) return
+                lastImageUri = key
+                val mime = desc.getMimeType(0)
+                val ext = when {
+                    mime.contains("png") -> "png"
+                    mime.contains("webp") -> "webp"
+                    mime.contains("gif") -> "gif"
+                    else -> "jpg"
+                }
+                val out = clipStore.newImageFile(ext)
+                val resolver = contentResolver
+                ioExec.execute {
+                    var ok = false
+                    try {
+                        resolver.openInputStream(uri)?.use { input ->
+                            out.outputStream().use { o ->
+                                val buf = ByteArray(16 * 1024)
+                                var total = 0L
+                                while (true) {
+                                    val n = input.read(buf)
+                                    if (n < 0) break
+                                    total += n
+                                    if (total > 12L * 1024 * 1024) throw java.io.IOException("ảnh quá lớn")
+                                    o.write(buf, 0, n)
+                                }
+                            }
+                            ok = out.length() > 0
+                        }
+                    } catch (_: Throwable) { }
+                    if (ok) handler.post { clipStore.addImage(out.name); clipPanel?.refresh() } else out.delete()
+                }
+            } else {
+                val text = item.coerceToText(this)?.toString() ?: return
+                val sig = "${text.length}:${text.hashCode()}"
+                // Khi chỉ là mở bàn phím: bỏ qua nếu nội dung này đã được lưu rồi (tránh mục đã xóa tự quay lại)
+                if (fromShow && sig == lastTextSig) return
+                lastTextSig = sig
+                if (clipStore.addText(text)) clipPanel?.refresh()
+            }
+        } catch (_: Throwable) { }
+    }
+
+    /** Dán một mục Clipboard vào ô đang nhập. */
+    private fun pasteClip(item: ClipItem) {
+        val ic = currentInputConnection
+        if (ic == null) { Toast.makeText(this, "Không có ô nhập nào đang được chọn.", Toast.LENGTH_SHORT).show(); return }
+        if (item.type == ClipStore.TYPE_TEXT) {
+            finishComposing()
+            ic.commitText(item.text, 1)
+            return
+        }
+        val file = clipStore.imageFile(item)
+        if (file == null || !file.exists()) { Toast.makeText(this, "Không tìm thấy file ảnh.", Toast.LENGTH_SHORT).show(); return }
+        val mime = when (file.extension.lowercase()) { "png" -> "image/png"; "webp" -> "image/webp"; "gif" -> "image/gif"; else -> "image/jpeg" }
+        try {
+            val uri = FileProvider.getUriForFile(this, "$packageName.clipfiles", file)
+            val ei = currentInputEditorInfo
+            val accepted = ei != null && EditorInfoCompat.getContentMimeTypes(ei).any { ClipDescription.compareMimeTypes(mime, it) }
+            if (accepted) {
+                val info = InputContentInfoCompat(uri, ClipDescription("clip", arrayOf(mime)), null)
+                val flags = if (Build.VERSION.SDK_INT >= 25) InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION else 0
+                if (InputConnectionCompat.commitContent(ic, ei!!, info, flags, null)) return
+            }
+            // Ô nhập không nhận ảnh trực tiếp: đặt ảnh lên khay nhớ tạm để người dùng dán bằng thao tác của ứng dụng đó.
+            ignoreClipUntil = SystemClock.elapsedRealtime() + 1500
+            (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager)
+                .setPrimaryClip(ClipData.newUri(contentResolver, "clip", uri))
+            Toast.makeText(this, "Ô này không nhận ảnh trực tiếp. Ảnh đã được sao chép, hãy chạm giữ ô nhập và chọn Dán.", Toast.LENGTH_LONG).show()
+        } catch (_: Throwable) {
+            Toast.makeText(this, "Không dán được ảnh.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // ----- Tìm kiếm Clipboard: dùng chính bàn phím gõ để nhập từ khóa -----
+    private fun startSearch() {
+        searchActive = true
+        searchText = clipPanel?.query ?: ""
+        finishComposing()
+        panelClipHost.visibility = View.GONE
+        panelType.visibility = View.VISIBLE
+        searchBar.visibility = View.VISIBLE
+        updateSearchBar()
+    }
+
+    private fun endSearch() {
+        if (!searchActive) return
+        searchActive = false
+        searchBar.visibility = View.GONE
+        panelType.visibility = View.GONE
+        panelClipHost.visibility = View.VISIBLE
+        clipPanel?.setQuery(searchText)
+    }
+
+    private fun updateSearchBar() {
+        tvSearch.hint = "Nhập từ khóa tìm kiếm…"
+        tvSearch.text = searchText
+    }
+
+    /** Bàn phím gõ đang được dùng (chế độ GÕ PHÍM hoặc đang nhập từ khóa tìm kiếm). */
+    private fun typing() = mode == 1 || searchActive
 
     override fun onEvaluateFullscreenMode(): Boolean = false
 
@@ -192,6 +341,10 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         tvHint = v.findViewById(R.id.tvHint)
         tabScan = v.findViewById(R.id.tabScan)
         tabType = v.findViewById(R.id.tabType)
+        tabClip = v.findViewById(R.id.tabClip)
+        panelClipHost = v.findViewById(R.id.panelClip)
+        searchBar = v.findViewById(R.id.searchBar)
+        tvSearch = v.findViewById(R.id.tvSearch)
         panelScan = v.findViewById(R.id.panelScan)
         panelType = v.findViewById(R.id.panelType)
         btnTools = v.findViewById(R.id.btnTools)
@@ -207,6 +360,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         // --- Hàng trên ---
         bind(tabScan, "QUÉT: dùng camera quét mã QR / mã vạch, mã tự nhập vào ô đang chọn.") { setMode(0) }
         bind(tabType, "GÕ PHÍM: bàn phím đầy đủ để gõ chữ, số, ký hiệu. Camera tự tắt để tiết kiệm pin.") { setMode(1) }
+        bind(tabClip, "CLIPBOARD: xem lại văn bản và hình ảnh đã sao chép, chạm để dán, ghim mục quan trọng.") { setMode(2) }
         bind(v.findViewById(R.id.btnHide), "ẨN BÀN PHÍM: thu gọn bàn phím lại.") { requestHideSelf(0) }
 
         // --- Hàng dưới ---
@@ -239,6 +393,17 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
 
         setupDragHandle(v.findViewById(R.id.dragHandle))
         buildTypePanel()
+        v.findViewById<View>(R.id.btnSearchDone).setOnClickListener { endSearch() }
+        clipPanel?.release()
+        clipPanel = ClipPanel(this, clipStore, object : ClipPanel.Callbacks {
+            override fun onPaste(item: ClipItem) = pasteClip(item)
+            override fun onSearch() = startSearch()
+            override fun onSearchCleared() { searchText = "" }
+        }).also {
+            it.setListHeight(dp(prefs.clipHeightDp.coerceIn(CLIP_MIN, CLIP_MAX)))
+            panelClipHost.removeAllViews()
+            panelClipHost.addView(it.view)
+        }
         Fonts.apply(v)
         applyScreenFlags()
         setMode(mode)
@@ -345,6 +510,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         var startY = 0f
         var startCam = 0
         var startRow = 0
+        var startClip = 0
         handle.setOnTouchListener { v, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -352,26 +518,34 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
                     startY = e.rawY
                     startCam = cameraBox.height
                     startRow = dp(prefs.keyRowDp)
+                    startClip = clipPanel?.listHeight ?: dp(230)
                     if (mode == 0) showHint("Kéo lên để tăng, kéo xuống để giảm chiều cao khung quét.")
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val dy = startY - e.rawY
-                    if (mode == 0) {
-                        cameraBox.layoutParams.height = (startCam + dy).toInt().coerceIn(dp(120), dp(420))
-                        cameraBox.requestLayout()
-                    } else {
-                        // 5 hàng phím: chia đều độ chênh cho từng hàng
-                        val h = (startRow + dy / 5f).toInt().coerceIn(dp(KEY_ROW_MIN), dp(KEY_ROW_MAX))
-                        for (i in 0 until panelType.childCount) panelType.getChildAt(i).layoutParams.height = h
-                        panelType.requestLayout()
+                    when {
+                        mode == 0 -> {
+                            cameraBox.layoutParams.height = (startCam + dy).toInt().coerceIn(dp(120), dp(420))
+                            cameraBox.requestLayout()
+                        }
+                        typing() -> {
+                            // 5 hàng phím: chia đều độ chênh cho từng hàng
+                            val h = (startRow + dy / 5f).toInt().coerceIn(dp(KEY_ROW_MIN), dp(KEY_ROW_MAX))
+                            for (i in 0 until panelType.childCount) panelType.getChildAt(i).layoutParams.height = h
+                            panelType.requestLayout()
+                        }
+                        else -> clipPanel?.setListHeight((startClip + dy).toInt().coerceIn(dp(CLIP_MIN), dp(CLIP_MAX)))
                     }
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    if (mode == 0) {
-                        prefs.cameraHeightDp = (cameraBox.height / resources.displayMetrics.density).toInt().coerceIn(120, 420)
-                    } else if (panelType.childCount > 0) {
-                        val px = panelType.getChildAt(0).layoutParams.height
-                        prefs.keyRowDp = (px / resources.displayMetrics.density).toInt().coerceIn(KEY_ROW_MIN, KEY_ROW_MAX)
+                    val density = resources.displayMetrics.density
+                    when {
+                        mode == 0 -> prefs.cameraHeightDp = (cameraBox.height / density).toInt().coerceIn(120, 420)
+                        typing() -> if (panelType.childCount > 0) {
+                            val px = panelType.getChildAt(0).layoutParams.height
+                            prefs.keyRowDp = (px / density).toInt().coerceIn(KEY_ROW_MIN, KEY_ROW_MAX)
+                        }
+                        else -> clipPanel?.let { prefs.clipHeightDp = (it.listHeight / density).toInt().coerceIn(CLIP_MIN, CLIP_MAX) }
                     }
                 }
             }
@@ -398,6 +572,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         btnTools.setImageResource(if (flyoutOpen) R.drawable.ic_close else R.drawable.ic_tune)
         tabScan.isSelected = mode == 0
         tabType.isSelected = mode == 1
+        tabClip.isSelected = mode == 2
         overlay.active = scanning
     }
 
@@ -417,10 +592,15 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     }
 
     private fun setMode(m: Int) {
+        if (searchActive) { searchActive = false; searchBar.visibility = View.GONE }
+        if (mode == 2 && m != 2) clipPanel?.endSelect()
+        finishComposing()
         mode = m
         panelScan.visibility = if (m == 0) View.VISIBLE else View.GONE
         panelType.visibility = if (m == 1) View.VISIBLE else View.GONE
-        if (m == 1) { closeFlyout(); stopCamera() } else if (prefs.autoStart && !scanning) startCamera()
+        panelClipHost.visibility = if (m == 2) View.VISIBLE else View.GONE
+        if (m != 0) { closeFlyout(); stopCamera() } else if (prefs.autoStart && !scanning) startCamera()
+        if (m == 2) clipPanel?.onShown()
         updateUi()
     }
 
@@ -437,6 +617,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         registry.currentState = Lifecycle.State.RESUMED
         lastSeen.clear()
         if (prefs.keySound) sounds()
+        ingestClipboard(true) // lấy nội dung đã sao chép trong lúc bàn phím chưa chạy
         applyScreenFlags(true)
         if (mode == 0 && prefs.autoStart && !scanning && root != null) startCamera()
     }
@@ -460,6 +641,9 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         executor.shutdown()
         tone?.release()
         soundHolder?.release()
+        try { clipMgr?.removePrimaryClipChangedListener(clipListener) } catch (_: Throwable) { }
+        clipPanel?.release()
+        ioExec.shutdown()
         super.onDestroy()
     }
 
@@ -633,7 +817,9 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         addKey(b, ",", 1f, KS.NORMAL) { type(",") }
         addKey(b, "", 3f, KS.NORMAL) { type(" ") }          // phím cách
         addKey(b, ".", 1f, KS.NORMAL) { type(".") }
-        addIconKey(b, R.drawable.ic_enter, 1.5f, KS.ACCENT) { finishComposing(); sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER) }
+        addIconKey(b, R.drawable.ic_enter, 1.5f, KS.ACCENT) {
+            if (searchActive) endSearch() else { finishComposing(); sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER) }
+        }
         panelType.addView(b)
 
         Fonts.apply(panelType)
@@ -708,13 +894,14 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
 
     /** Chèn văn bản thường (kết thúc từ Telex đang gõ dở trước). */
     private fun type(s: String) {
+        if (searchActive) { searchText += s; updateSearchBar(); return }
         finishComposing()
         currentInputConnection?.commitText(s, 1)
     }
 
     private fun typeChar(c: Char, letter: Boolean) {
         val ch = if (letter && shift > 0) c.uppercaseChar() else c
-        if (vn && letter) telexKey(ch) else type(ch.toString())
+        if (vn && letter && !searchActive) telexKey(ch) else type(ch.toString())
         if (letter && shift == 1) { shift = 0; refreshShift() }
     }
 
@@ -735,6 +922,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
 
     /** Xóa: nếu đang gõ dở một từ Telex thì bỏ phím cuối của từ đó, ngược lại xóa ký tự như bình thường. */
     private fun handleDelete() {
+        if (searchActive) { searchText = searchText.dropLast(1); updateSearchBar(); return }
         if (!telex.isEmpty) {
             telex.backspace()
             currentInputConnection?.setComposingText(if (telex.isEmpty) "" else telex.text(), 1)
