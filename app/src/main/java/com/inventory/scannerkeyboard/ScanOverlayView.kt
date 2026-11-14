@@ -23,15 +23,15 @@ class ScanOverlayView @JvmOverloads constructor(
 ) : View(context, attrs) {
 
     private val d = resources.displayMetrics.density
-    private val accent = Color.parseColor("#EE4D2D")
-    private val green = Color.parseColor("#22C55E")
+    private val accent = Color.parseColor("#F0A18A")
+    private val green = Color.parseColor("#7BD389")
 
     private val frame = RectF()
     private val scrimPath = Path()
     private val cornerPath = Path()
     private val checkPath = Path()
 
-    private val scrimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#8C0A0F22"); style = Paint.Style.FILL }
+    private val scrimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#59141A2A"); style = Paint.Style.FILL }
     private val cornerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE; strokeWidth = 4.5f * d
         strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
@@ -47,7 +47,7 @@ class ScanOverlayView @JvmOverloads constructor(
     private var laserShader: LinearGradient? = null
     private val trailHeight = 34f * d
     private val trailShader = LinearGradient(
-        0f, -trailHeight, 0f, 0f, Color.parseColor("#00EE4D2D"), Color.parseColor("#66EE4D2D"), Shader.TileMode.CLAMP
+        0f, -trailHeight, 0f, 0f, Color.parseColor("#00F0A18A"), Color.parseColor("#55F0A18A"), Shader.TileMode.CLAMP
     )
 
     private var laserT = 0f

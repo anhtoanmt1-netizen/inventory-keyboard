@@ -212,6 +212,25 @@
                 style="@style/SectionTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:text="TIẾT KIỆM PIN" />
+
+            <TextView style="@style/SettingTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:text="Tự tắt camera khi không quét (giây)" />
+            <TextView style="@style/SettingDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Nếu quá thời gian này không quét mã nào, camera tự tắt để đỡ nóng máy và đỡ hao pin. Bật lại bằng biểu tượng công cụ. Nhập 0 = không bao giờ tự tắt (mặc định)." />
+            <EditText android:id="@+id/etIdleOff" style="@style/SettingInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="number" android:imeOptions="actionDone" android:singleLine="true" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_card"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                style="@style/SectionTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:text="THỬ NGHIỆM" />
 
             <TextView style="@style/SettingDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Chạm vào ô bên dưới để mở bàn phím, rồi quét thử một mã." />
@@ -238,7 +257,11 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
                 android:lineSpacingExtra="4dp"
-                android:text="• Tab QUÉT: quét mã bằng camera, mã tự nhập vào ô đang chọn.\n• Tab GÕ PHÍM: bàn phím đầy đủ (chữ, số, ký hiệu).\n• Giữ lâu một nút trên bàn phím để xem hướng dẫn chức năng.\n• Kéo thanh nhỏ dưới khung camera để chỉnh chiều cao.\n• Muốn gõ tiếng Việt có dấu: bấm 🌐 để đổi sang bàn phím khác."
+                android:text="• Hàng trên: biểu tượng khung quét = QUÉT, biểu tượng bàn phím = GÕ PHÍM, mũi tên xuống = ẨN bàn phím.
+• Hàng dưới: biểu tượng thanh trượt mở danh sách (camera, flash, luôn sáng, giảm sáng, tự Enter); kế bên là XÓA, ENTER, ĐỔI BÀN PHÍM.
+• Giữ lâu một biểu tượng để xem hướng dẫn chức năng.
+• Kéo thanh nhỏ dưới khung camera để chỉnh chiều cao.
+• Muốn gõ tiếng Việt có dấu: dùng biểu tượng quả địa cầu để đổi sang bàn phím khác."
                 android:textColor="@color/text"
                 android:textSize="13sp" />
 

@@ -4,39 +4,47 @@
     android:layout_height="wrap_content"
     android:background="@color/bg"
     android:orientation="vertical"
-    android:paddingBottom="6dp">
+    android:paddingBottom="4dp">
 
-    <!-- Thanh chọn chế độ -->
+    <!-- Hàng trên: QUÉT / GÕ PHÍM / ẨN (chỉ biểu tượng, 3 nút bằng nhau) -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="46dp"
+        android:layout_height="44dp"
         android:orientation="horizontal"
-        android:padding="5dp">
-
-        <TextView
-            android:id="@+id/tabScan"
-            style="@style/KbTab"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_marginEnd="5dp"
-            android:layout_weight="1"
-            android:text="QUÉT" />
-
-        <TextView
-            android:id="@+id/tabType"
-            style="@style/KbTab"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_marginEnd="5dp"
-            android:layout_weight="1"
-            android:text="GÕ PHÍM" />
-
-        <TextView
-            android:id="@+id/btnHide"
-            style="@style/KbBtn"
-            android:layout_width="52dp"
-            android:layout_height="match_parent"
-            android:text="▼" />
+        android:paddingStart="5dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="5dp"
+        android:paddingBottom="4dp">
+            <ImageView
+                android:id="@+id/tabScan"
+                style="@style/KbIconToggle"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="3dp"
+                android:layout_marginEnd="3dp"
+                android:layout_weight="1"
+                android:contentDescription="tabScan"
+                android:src="@drawable/ic_scan" />
+            <ImageView
+                android:id="@+id/tabType"
+                style="@style/KbIconToggle"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="3dp"
+                android:layout_marginEnd="3dp"
+                android:layout_weight="1"
+                android:contentDescription="tabType"
+                android:src="@drawable/ic_keyboard" />
+            <ImageView
+                android:id="@+id/btnHide"
+                style="@style/KbIcon"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="3dp"
+                android:layout_marginEnd="3dp"
+                android:layout_weight="1"
+                android:contentDescription="btnHide"
+                android:src="@drawable/ic_chevron_down" />
     </LinearLayout>
 
     <!-- MÀN HÌNH QUÉT -->
@@ -65,7 +73,6 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent" />
 
-            <!-- Logo góc trên bên trái -->
             <ImageView
                 android:id="@+id/imgLogo"
                 android:layout_width="wrap_content"
@@ -80,7 +87,6 @@
                 android:paddingBottom="5dp"
                 android:src="@drawable/logo_spx" />
 
-            <!-- Gợi ý chức năng (hiện khi giữ lâu một nút) -->
             <TextView
                 android:id="@+id/tvHint"
                 android:layout_width="match_parent"
@@ -95,7 +101,6 @@
                 android:textSize="12sp"
                 android:visibility="gone" />
 
-            <!-- Trạng thái / kết quả -->
             <TextView
                 android:id="@+id/tvStatus"
                 android:layout_width="wrap_content"
@@ -108,16 +113,74 @@
                 android:paddingTop="6dp"
                 android:paddingEnd="12dp"
                 android:paddingBottom="6dp"
-                android:text="Giữ lâu một nút để xem hướng dẫn"
+                android:text="Giữ lâu một biểu tượng để xem hướng dẫn"
                 android:textColor="@color/text"
                 android:textSize="12sp" />
+
+            <!-- Danh sách tính năng (mở ra từ biểu tượng công cụ ở hàng dưới) -->
+            <LinearLayout
+                android:id="@+id/flyout"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|start"
+                android:layout_margin="8dp"
+                android:background="@drawable/bg_flyout"
+                android:orientation="horizontal"
+                android:padding="6dp"
+                android:visibility="gone">
+                <ImageView
+                    android:id="@+id/fCam"
+                    style="@style/KbIconToggle"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="3dp"
+                    android:layout_marginEnd="3dp"
+                    android:contentDescription="fCam"
+                    android:src="@drawable/ic_camera" />
+                <ImageView
+                    android:id="@+id/fFlash"
+                    style="@style/KbIconToggle"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="3dp"
+                    android:layout_marginEnd="3dp"
+                    android:contentDescription="fFlash"
+                    android:src="@drawable/ic_flash" />
+                <ImageView
+                    android:id="@+id/fKeepOn"
+                    style="@style/KbIconToggle"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="3dp"
+                    android:layout_marginEnd="3dp"
+                    android:contentDescription="fKeepOn"
+                    android:src="@drawable/ic_sun" />
+                <ImageView
+                    android:id="@+id/fDim"
+                    style="@style/KbIconToggle"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="3dp"
+                    android:layout_marginEnd="3dp"
+                    android:contentDescription="fDim"
+                    android:src="@drawable/ic_moon" />
+                <ImageView
+                    android:id="@+id/fAutoEnter"
+                    style="@style/KbIconToggle"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="3dp"
+                    android:layout_marginEnd="3dp"
+                    android:contentDescription="fAutoEnter"
+                    android:src="@drawable/ic_enter_auto" />
+            </LinearLayout>
         </FrameLayout>
 
-        <!-- Tay nắm kéo chỉnh chiều cao khung quét -->
+        <!-- Thanh kéo chỉnh chiều cao khung quét -->
         <FrameLayout
             android:id="@+id/dragHandle"
             android:layout_width="match_parent"
-            android:layout_height="26dp">
+            android:layout_height="24dp">
 
             <View
                 android:layout_width="46dp"
@@ -126,104 +189,53 @@
                 android:background="@drawable/bg_handle" />
         </FrameLayout>
 
+        <!-- Hàng dưới duy nhất: công cụ / xóa / Enter / đổi bàn phím -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="46dp"
             android:orientation="horizontal"
             android:paddingStart="5dp"
             android:paddingEnd="5dp">
-
-            <TextView
-                android:id="@+id/btnCam"
-                style="@style/KbToggle"
+            <ImageView
+                android:id="@+id/btnTools"
+                style="@style/KbIconToggle"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_marginStart="3dp"
                 android:layout_marginEnd="3dp"
-                android:layout_weight="2.4"
-                android:text="BẬT CAMERA" />
-
-            <TextView
+                android:layout_weight="1"
+                android:contentDescription="btnTools"
+                android:src="@drawable/ic_tune" />
+            <ImageView
                 android:id="@+id/btnDel"
-                style="@style/KbBtn"
+                style="@style/KbIcon"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_marginStart="3dp"
                 android:layout_marginEnd="3dp"
                 android:layout_weight="1"
-                android:text="⌫"
-                android:textSize="18sp" />
-
-            <TextView
+                android:contentDescription="btnDel"
+                android:src="@drawable/ic_backspace" />
+            <ImageView
                 android:id="@+id/btnEnter"
-                style="@style/KbBtn"
+                style="@style/KbIcon"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_marginStart="3dp"
                 android:layout_marginEnd="3dp"
                 android:layout_weight="1"
-                android:text="↵"
-                android:textSize="18sp" />
-
-            <TextView
+                android:contentDescription="btnEnter"
+                android:src="@drawable/ic_enter" />
+            <ImageView
                 android:id="@+id/btnSwitch"
-                style="@style/KbBtn"
+                style="@style/KbIcon"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_marginStart="3dp"
                 android:layout_marginEnd="3dp"
                 android:layout_weight="1"
-                android:text="🌐"
-                android:textSize="18sp" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="40dp"
-            android:orientation="horizontal"
-            android:paddingStart="5dp"
-            android:paddingTop="6dp"
-            android:paddingEnd="5dp">
-
-            <TextView
-                android:id="@+id/chipFlash"
-                style="@style/KbChip"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="3dp"
-                android:layout_marginEnd="3dp"
-                android:layout_weight="1"
-                android:text="FLASH" />
-
-            <TextView
-                android:id="@+id/chipKeepOn"
-                style="@style/KbChip"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="3dp"
-                android:layout_marginEnd="3dp"
-                android:layout_weight="1.2"
-                android:text="LUÔN SÁNG" />
-
-            <TextView
-                android:id="@+id/chipDim"
-                style="@style/KbChip"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="3dp"
-                android:layout_marginEnd="3dp"
-                android:layout_weight="1.2"
-                android:text="GIẢM SÁNG" />
-
-            <TextView
-                android:id="@+id/chipAutoEnter"
-                style="@style/KbChip"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="3dp"
-                android:layout_marginEnd="3dp"
-                android:layout_weight="1.1"
-                android:text="TỰ ENTER" />
+                android:contentDescription="btnSwitch"
+                android:src="@drawable/ic_globe" />
         </LinearLayout>
     </LinearLayout>
 
@@ -236,4 +248,15 @@
         android:paddingStart="2dp"
         android:paddingEnd="2dp"
         android:visibility="gone" />
+
+    <!-- Hàng cuối cùng: tên người tạo -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:alpha="0.75"
+        android:gravity="center"
+        android:text="Created by: Toan.nguyenanh@spxexpress.com"
+        android:textColor="@color/muted"
+        android:textSize="10sp" />
 </LinearLayout>

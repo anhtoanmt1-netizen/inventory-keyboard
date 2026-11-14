@@ -62,6 +62,7 @@ class MainActivity : Activity() {
         et(R.id.etEnterDelay).setText(p.enterDelayMs.toString())
         et(R.id.etDimPercent).setText(p.dimPercent.toString())
         et(R.id.etCamHeight).setText(p.cameraHeightDp.toString())
+        et(R.id.etIdleOff).setText(p.idleOffSec.toString())
         sw(R.id.swEnter).isChecked = p.sendEnter
         sw(R.id.swAutoStart).isChecked = p.autoStart
         sw(R.id.swBeep).isChecked = p.beep
@@ -97,6 +98,7 @@ class MainActivity : Activity() {
         p.enterDelayMs = num(R.id.etEnterDelay, 60, 0, 1000)
         p.dimPercent = num(R.id.etDimPercent, 50, 5, 100)
         p.cameraHeightDp = num(R.id.etCamHeight, 228, 120, 420)
+        p.idleOffSec = num(R.id.etIdleOff, 0, 0, 3600)
         p.sendEnter = sw(R.id.swEnter).isChecked
         p.autoStart = sw(R.id.swAutoStart).isChecked
         p.beep = sw(R.id.swBeep).isChecked

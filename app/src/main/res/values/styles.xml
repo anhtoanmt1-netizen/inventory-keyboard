@@ -22,6 +22,17 @@
     <style name="KbToggle" parent="KbBtn">
         <item name="android:background">@drawable/bg_toggle</item>
     </style>
+    <!-- Nút biểu tượng: kích thước icon luôn 24dp, nền theo trạng thái -->
+    <style name="KbIcon">
+        <item name="android:background">@drawable/bg_key</item>
+        <item name="android:tint">@color/icon_tint</item>
+        <item name="android:scaleType">fitCenter</item>
+        <item name="android:padding">11dp</item>
+        <item name="android:clickable">true</item>
+    </style>
+    <style name="KbIconToggle" parent="KbIcon">
+        <item name="android:background">@drawable/bg_toggle</item>
+    </style>
     <style name="KbChip" parent="KbToggle">
         <item name="android:textSize">11sp</item>
     </style>

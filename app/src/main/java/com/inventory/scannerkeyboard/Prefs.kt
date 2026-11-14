@@ -35,4 +35,7 @@ class Prefs(context: Context) {
 
     /** Chiều cao khung camera (dp). Mặc định 228 = 190 x 1.2. */
     var cameraHeightDp: Int get() = getI("camHeight", 228); set(v) = putI("camHeight", v)
+
+    /** Tự tắt camera nếu quá số giây này không quét được mã nào (0 = không bao giờ). */
+    var idleOffSec: Int get() = getI("idleOff", 0); set(v) = putI("idleOff", v)
 }
