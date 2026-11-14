@@ -24,6 +24,7 @@ import android.graphics.drawable.RippleDrawable
 import android.graphics.drawable.StateListDrawable
 import android.os.Build
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
@@ -315,6 +316,34 @@ object ThemeRender {
         return v
     }
 
+    /** Gắn lớp hiệu ứng (ánh sáng chạy liên tục) vào khung xem trước và cho phép chạm thử vào các phím. */
+    private fun attachFx(box: ViewGroup, st: PanelStyle, keys: List<View>) {
+        val fx = FxDrawable(box) { keys }
+        fx.style = st
+        fx.attach()
+        for (k in keys) {
+            k.setOnTouchListener { v, e ->
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> fx.down(v, e.x, e.y)
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> fx.up(v)
+                }
+                true
+            }
+        }
+    }
+
+    private fun collectKeys(box: ViewGroup): List<View> {
+        val out = ArrayList<View>()
+        for (i in 0 until box.childCount) {
+            val row = box.getChildAt(i) as? ViewGroup ?: continue
+            for (j in 0 until row.childCount) {
+                val c = row.getChildAt(j)
+                if (c is TextView || c is ImageView) out.add(c)
+            }
+        }
+        return out
+    }
+
     /** Mô phỏng bảng Bàn phím (3 hàng phím chữ + hàng dưới) với đúng kiểu đang chỉnh. */
     fun previewKeyboard(ctx: Context, st: PanelStyle, rowDp: Int): View {
         val box = LinearLayout(ctx).apply {
@@ -346,6 +375,7 @@ object ThemeRender {
         r4.addView(previewKey(ctx, st, "VN", 0, Kind.SPECIAL, 1.2f))
         r4.addView(previewKey(ctx, st, "", 0, Kind.NORMAL, 4f))
         r4.addView(previewKey(ctx, st, null, R.drawable.ic_enter, Kind.ACCENT, 1.5f))
+        attachFx(box, st, collectKeys(box))
         return box
     }
 
@@ -383,6 +413,9 @@ object ThemeRender {
             row.addView(iv, LinearLayout.LayoutParams(dp(ctx, 44), dp(ctx, 44)).apply { setMargins(dp(ctx, 4), 0, dp(ctx, 4), 0) })
         }
         box.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(ctx, 6) })
+        val btns = ArrayList<View>()
+        for (i in 0 until row.childCount) btns.add(row.getChildAt(i))
+        attachFx(box, st, btns)
         return box
     }
 }

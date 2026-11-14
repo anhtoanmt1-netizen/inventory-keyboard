@@ -91,6 +91,9 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     private var statusColor0 = 0
     private var hintColor0 = 0
     private var scanTextCaptured = false
+    private var fxKb: FxDrawable? = null        // hiệu ứng chạm + ánh sáng trên bảng gõ
+    private var fxScan: FxDrawable? = null      // hiệu ứng chạm + ánh sáng trên hàng nút Scan
+    private var scanButtonViews: List<View> = emptyList()
     private var toolsCustom = false
     private lateinit var flyout: LinearLayout
     private lateinit var fCam: ImageView
@@ -478,6 +481,9 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
             panelClipHost.addView(it.view)
         }
         Fonts.apply(v)
+        fxKb?.detach(); fxScan?.detach()
+        fxKb = FxDrawable(panelType) { keyViews }.also { it.attach() }
+        fxScan = FxDrawable(btnArea) { scanButtonViews }.also { it.attach() }
         applyKbTheme()   // sau Fonts.apply để font theo giao diện không bị ghi đè
         applyScanTheme()
         applyScreenFlags()
@@ -502,6 +508,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
                 ScanButtons.hasCustomImage(this, lay, k)
             )
         }
+        scanButtonViews = m.values.toList()
         btnTools = m.getValue("tools")
         toolsCustom = ScanButtons.hasCustomImage(this, lay, "tools")
         bind(btnTools, "CÔNG CỤ: mở danh sách camera, flash, luôn sáng, giảm sáng, tự Enter. Chạm lại để thu gọn.") { toggleFlyout() }
@@ -522,15 +529,34 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         pressEffect(view)
     }
 
+    private fun fxOf(v: View): FxDrawable? = when {
+        fxKb?.owns(v) == true -> fxKb
+        fxScan?.owns(v) == true -> fxScan
+        else -> null
+    }
+
+    /** Chạm xuống: hiệu ứng theo giao diện (nhún, gợn sóng, hạt sáng...) hoặc nhún mặc định nếu không thuộc bảng nào. */
+    private fun touchDown(v: View, e: MotionEvent) {
+        val fx = fxOf(v)
+        if (fx != null) fx.down(v, e.x, e.y)
+        else v.animate().scaleX(0.94f).scaleY(0.94f).setDuration(70).start()
+    }
+
+    private fun touchUp(v: View) {
+        val fx = fxOf(v)
+        if (fx != null) fx.up(v)
+        else v.animate().scaleX(1f).scaleY(1f).setDuration(110).start()
+    }
+
     private fun pressEffect(view: View, sound: Boolean = false) {
         view.setOnTouchListener { v, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     if (sound) keyClick()
                     keyHaptic()
-                    v.animate().scaleX(0.94f).scaleY(0.94f).setDuration(70).start()
+                    touchDown(v, e)
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> v.animate().scaleX(1f).scaleY(1f).setDuration(110).start()
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> touchUp(v)
             }
             false
         }
@@ -544,14 +570,14 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
                     if (sound) keyClick()
                     keyHaptic()
                     v.isPressed = true
-                    v.animate().scaleX(0.94f).scaleY(0.94f).setDuration(70).start()
+                    touchDown(v, e)
                     action()
                     repeatAction = action
                     handler.postDelayed(repeatRunnable, 400)
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     v.isPressed = false
-                    v.animate().scaleX(1f).scaleY(1f).setDuration(110).start()
+                    touchUp(v)
                     handler.removeCallbacks(repeatRunnable)
                     repeatAction = null
                 }
@@ -896,6 +922,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
 
     /** Nền phía sau các phím + font / màu chữ của bảng Bàn phím. */
     private fun applyKbTheme() {
+        fxKb?.style = styleKb
         panelType.clipChildren = false
         panelType.background = ThemeRender.panelBackground(this, styleKb)
         applyKbText()
@@ -907,6 +934,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
 
     /** Nền của bảng Scan + font của dòng trạng thái / gợi ý (bảng Scan không có chữ nào khác). */
     private fun applyScanTheme() {
+        fxScan?.style = styleScan
         panelScan.background = ThemeRender.panelBackground(this, styleScan)
         if (!scanTextCaptured) {
             statusColor0 = tvStatus.currentTextColor

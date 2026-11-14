@@ -20,6 +20,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.SeekBar
+import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.ContextCompat
@@ -38,7 +39,7 @@ class ThemeActivity : Activity() {
     private lateinit var state: ThemeState
 
     private var scope = -1   // -1 chưa chọn, 0 bảng Scan, 1 bảng Bàn phím, 2 cả hai
-    private var group = 0    // 0 phím, 1 nền, 2 chữ
+    private var group = 0    // 0 phím, 1 nền, 2 chữ, 3 hiệu ứng chạm, 4 ánh sáng
 
     private lateinit var previewHost: LinearLayout
     private lateinit var listBox: LinearLayout
@@ -295,8 +296,8 @@ class ThemeActivity : Activity() {
             Fonts.apply(editorBox)
             return
         }
-        val names = listOf("Phím", "Nền", "Chữ")
-        val icons = listOf(R.drawable.ic_keyboard, R.drawable.ic_palette, R.drawable.ic_tune)
+        val names = listOf("Phím", "Nền", "Chữ", "Chạm", "Sáng")
+        val icons = listOf(R.drawable.ic_keyboard, R.drawable.ic_palette, R.drawable.ic_tune, R.drawable.ic_sparkle, R.drawable.ic_sun)
         names.forEachIndexed { i, n ->
             val t = TextView(this).apply {
                 text = n; textSize = 12f; gravity = Gravity.CENTER; setTextColor(col(R.color.text))
@@ -314,7 +315,9 @@ class ThemeActivity : Activity() {
         when (group) {
             0 -> buildKeys(editorBox)
             1 -> buildBackground(editorBox)
-            else -> buildFont(editorBox)
+            2 -> buildFont(editorBox)
+            3 -> buildTouch(editorBox)
+            else -> buildLight(editorBox)
         }
         Fonts.apply(tabsBox)
         Fonts.apply(editorBox)
@@ -398,6 +401,64 @@ class ThemeActivity : Activity() {
         seek(g, "Bóng chữ", 0, 8, "", { it.textShadow }) { s, v -> s.copy(textShadow = v) }
         seek(g, "Độ nổi của chữ", 0, 4, "", { it.textRaise }) { s, v -> s.copy(textRaise = v) }
         colorRow(g, "Màu bóng chữ", true, { it.textShadowColor }) { s, c -> s.copy(textShadowColor = c) }
+    }
+
+    /** Hàng công tắc BẬT / TẮT có mô tả. rebuild = true thì dựng lại bảng chỉnh để hiện / ẩn các thông số đi kèm. */
+    private fun switchRow(parent: LinearLayout, title: String, desc: String, rebuild: Boolean, get: (PanelStyle) -> Boolean, set: (PanelStyle, Boolean) -> PanelStyle) {
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        texts.addView(TextView(this).apply { text = title; textSize = 14f; setTextColor(col(R.color.text)); setTypeface(null, Typeface.BOLD) })
+        if (desc.isNotEmpty()) texts.addView(TextView(this).apply { text = desc; textSize = 12f; setTextColor(col(R.color.muted)) })
+        row.addView(texts, lp(0, WRAP).apply { weight = 1f })
+        val sw = Switch(this).apply { isChecked = get(viewStyle()) }
+        sw.setOnCheckedChangeListener { _, on ->
+            edit { s -> set(s, on) }
+            if (rebuild) rebuildEditor()
+        }
+        row.addView(sw)
+        parent.addView(row, lp(MATCH, WRAP).apply { topMargin = dp(14) })
+    }
+
+    /** Công tắc cho một bit trong lightFx. */
+    private fun lightSwitch(parent: LinearLayout, title: String, desc: String, bit: Int) =
+        switchRow(parent, title, desc, true, { (it.lightFx and bit) != 0 }) { s, on ->
+            s.copy(lightFx = if (on) s.lightFx or bit else s.lightFx and bit.inv())
+        }
+
+    // ------------------------------------------------------------------ Nhóm 4: hiệu ứng khi chạm và gõ
+    private fun buildTouch(g: LinearLayout) {
+        note(g, "Mỗi hiệu ứng có công tắc riêng, bật bao nhiêu cũng được. Bạn có thể chạm thử vào các phím ở khung xem trước phía trên. Phạm vi hiện tại: " + scopeName() + ".")
+        switchRow(g, "Nhún phím", "Phím co lại một chút khi chạm.", true, { it.fxBounce }) { s, on -> s.copy(fxBounce = on) }
+        if (viewStyle().fxBounce) {
+            seek(g, "Mức nhún", 80, 100, "%", { it.fxBounceScale }) { s, v -> s.copy(fxBounceScale = v) }
+            switchRow(g, "Đàn hồi", "Phím bật nảy lại khi nhả tay.", false, { it.fxElastic }) { s, on -> s.copy(fxElastic = on) }
+        }
+        switchRow(g, "Gợn sóng", "Vòng sáng lan ra từ điểm chạm.", false, { it.fxRipple }) { s, on -> s.copy(fxRipple = on) }
+        switchRow(g, "Phát sáng khi chạm", "Phím lóe sáng rồi mờ dần.", false, { it.fxFlash }) { s, on -> s.copy(fxFlash = on) }
+        switchRow(g, "Hạt sáng", "Các hạt sáng bắn ra từ điểm chạm.", true, { it.fxSparks }) { s, on -> s.copy(fxSparks = on) }
+        if (viewStyle().fxSparks) seek(g, "Số hạt sáng", 4, 24, "", { it.fxSparkCount }) { s, v -> s.copy(fxSparkCount = v) }
+        colorRow(g, "Màu hiệu ứng", false, { it.fxColor }) { s, c -> s.copy(fxColor = c) }
+        seek(g, "Cường độ", 10, 100, "%", { it.fxIntensity }) { s, v -> s.copy(fxIntensity = v) }
+        seek(g, "Thời gian hiệu ứng", 150, 1000, " ms", { it.fxDuration }) { s, v -> s.copy(fxDuration = v) }
+    }
+
+    // ------------------------------------------------------------------ Nhóm 6: ánh sáng và màu sắc
+    private fun buildLight(g: LinearLayout) {
+        note(g, "Có thể bật nhiều kiểu cùng lúc. Màu viền lấy theo thứ tự ưu tiên Rainbow, RGB, Gradient, rồi tới màu bạn chọn. Neon và Glow quyết định kiểu quầng sáng; Lan tỏa là lớp ánh sáng nền. Hiệu ứng chỉ chạy khi bàn phím đang hiện. Phạm vi hiện tại: " + scopeName() + ".")
+        lightSwitch(g, "RGB", "Viền đổi màu liên tục, tất cả phím cùng một màu.", FxDrawable.RGB)
+        lightSwitch(g, "Rainbow", "Dải màu cầu vồng chạy ngang các phím.", FxDrawable.RAINBOW)
+        lightSwitch(g, "Gradient", "Chuyển màu mượt giữa hai màu bạn chọn.", FxDrawable.GRADIENT)
+        lightSwitch(g, "Neon", "Viền mảnh có lõi sáng trắng và quầng sáng.", FxDrawable.NEON)
+        lightSwitch(g, "Glow", "Quầng sáng mềm quanh mỗi phím.", FxDrawable.GLOW)
+        lightSwitch(g, "Ánh sáng lan tỏa", "Vệt sáng mềm trôi trên toàn bảng.", FxDrawable.DIFFUSE)
+        val bits = viewStyle().lightFx
+        if (bits == 0) return
+        colorRow(g, "Màu ánh sáng", false, { it.lightColor }) { s, c -> s.copy(lightColor = c) }
+        if ((bits and FxDrawable.GRADIENT) != 0) colorRow(g, "Màu thứ hai (Gradient)", false, { it.lightColor2 }) { s, c -> s.copy(lightColor2 = c) }
+        seek(g, "Cường độ ánh sáng", 10, 100, "%", { it.lightIntensity }) { s, v -> s.copy(lightIntensity = v) }
+        val moving = FxDrawable.RGB or FxDrawable.RAINBOW or FxDrawable.GRADIENT or FxDrawable.DIFFUSE
+        if ((bits and moving) != 0) seek(g, "Tốc độ chuyển màu", 1, 100, "", { it.lightSpeed }) { s, v -> s.copy(lightSpeed = v) }
+        if ((bits and (FxDrawable.GLOW or FxDrawable.NEON)) != 0) seek(g, "Độ lan tỏa của quầng sáng", 0, 12, "dp", { it.lightSpread }) { s, v -> s.copy(lightSpread = v) }
     }
 
     private fun scopeName() = when (scope) { 0 -> "bảng Scan"; 1 -> "bảng Bàn phím"; else -> "cả hai bảng" }

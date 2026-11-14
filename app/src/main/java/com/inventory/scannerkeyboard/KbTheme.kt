@@ -45,7 +45,27 @@ data class PanelStyle(
     val iconColor: Int = 0xFFCBD2E4.toInt(),
     val textShadow: Int = 0,                // bóng chữ 0..8
     val textShadowColor: Int = 0xB3000000.toInt(),
-    val textRaise: Int = 0                  // độ nổi của chữ (lệch bóng xuống) 0..4
+    val textRaise: Int = 0,                 // độ nổi của chữ (lệch bóng xuống) 0..4
+
+    // ---- Nhóm 4: hiệu ứng khi chạm và gõ (bật / tắt độc lập, kết hợp tự do) ----
+    val fxBounce: Boolean = true,           // nhún phím (mặc định giống bản gốc)
+    val fxBounceScale: Int = 94,            // mức nhún 80..100 (%)
+    val fxElastic: Boolean = false,         // đàn hồi khi nhả
+    val fxRipple: Boolean = false,          // gợn sóng
+    val fxFlash: Boolean = false,           // phát sáng phím khi chạm
+    val fxSparks: Boolean = false,          // hạt sáng
+    val fxSparkCount: Int = 10,             // số hạt 4..24
+    val fxColor: Int = 0xFFFFE066.toInt(),  // màu hiệu ứng chạm
+    val fxIntensity: Int = 70,              // cường độ 10..100
+    val fxDuration: Int = 450,              // thời gian hiệu ứng 150..1000 ms
+
+    // ---- Nhóm 6: ánh sáng và màu sắc (chạy liên tục, chỉ khi bàn phím đang hiện) ----
+    val lightFx: Int = 0,                   // bit: 1 RGB, 2 Neon, 4 Rainbow, 8 Glow, 16 Gradient, 32 Lan tỏa
+    val lightColor: Int = 0xFF4DA3FF.toInt(),
+    val lightColor2: Int = 0xFFFF6BCB.toInt(),
+    val lightIntensity: Int = 80,           // cường độ 10..100
+    val lightSpeed: Int = 30,               // tốc độ đổi màu 1..100
+    val lightSpread: Int = 4                // độ lan tỏa / mờ của quầng sáng 0..12
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("cornerDp", cornerDp).put("gapDp", gapDp).put("borderDp", borderDp).put("borderColor", borderColor)
@@ -59,6 +79,11 @@ data class PanelStyle(
         .put("fontFamily", fontFamily).put("fontWeight", fontWeight).put("fontScale", fontScale)
         .put("textColor", textColor).put("iconColor", iconColor)
         .put("textShadow", textShadow).put("textShadowColor", textShadowColor).put("textRaise", textRaise)
+        .put("fxBounce", fxBounce).put("fxBounceScale", fxBounceScale).put("fxElastic", fxElastic)
+        .put("fxRipple", fxRipple).put("fxFlash", fxFlash).put("fxSparks", fxSparks).put("fxSparkCount", fxSparkCount)
+        .put("fxColor", fxColor).put("fxIntensity", fxIntensity).put("fxDuration", fxDuration)
+        .put("lightFx", lightFx).put("lightColor", lightColor).put("lightColor2", lightColor2)
+        .put("lightIntensity", lightIntensity).put("lightSpeed", lightSpeed).put("lightSpread", lightSpread)
 
     companion object {
         fun fromJson(o: JSONObject?): PanelStyle {
@@ -95,7 +120,23 @@ data class PanelStyle(
                 iconColor = o.optInt("iconColor", d.iconColor),
                 textShadow = o.optInt("textShadow", d.textShadow).coerceIn(0, 8),
                 textShadowColor = o.optInt("textShadowColor", d.textShadowColor),
-                textRaise = o.optInt("textRaise", d.textRaise).coerceIn(0, 4)
+                textRaise = o.optInt("textRaise", d.textRaise).coerceIn(0, 4),
+                fxBounce = o.optBoolean("fxBounce", d.fxBounce),
+                fxBounceScale = o.optInt("fxBounceScale", d.fxBounceScale).coerceIn(80, 100),
+                fxElastic = o.optBoolean("fxElastic", d.fxElastic),
+                fxRipple = o.optBoolean("fxRipple", d.fxRipple),
+                fxFlash = o.optBoolean("fxFlash", d.fxFlash),
+                fxSparks = o.optBoolean("fxSparks", d.fxSparks),
+                fxSparkCount = o.optInt("fxSparkCount", d.fxSparkCount).coerceIn(4, 24),
+                fxColor = o.optInt("fxColor", d.fxColor),
+                fxIntensity = o.optInt("fxIntensity", d.fxIntensity).coerceIn(10, 100),
+                fxDuration = o.optInt("fxDuration", d.fxDuration).coerceIn(150, 1000),
+                lightFx = o.optInt("lightFx", d.lightFx).coerceIn(0, 63),
+                lightColor = o.optInt("lightColor", d.lightColor),
+                lightColor2 = o.optInt("lightColor2", d.lightColor2),
+                lightIntensity = o.optInt("lightIntensity", d.lightIntensity).coerceIn(10, 100),
+                lightSpeed = o.optInt("lightSpeed", d.lightSpeed).coerceIn(1, 100),
+                lightSpread = o.optInt("lightSpread", d.lightSpread).coerceIn(0, 12)
             )
         }
     }
