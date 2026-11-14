@@ -230,6 +230,24 @@
                 style="@style/SectionTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:text="GIAO DIỆN BÀN PHÍM" />
+
+            <TextView style="@style/SettingDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Tùy chỉnh hình dạng phím, hình nền, font chữ cho bảng Scan và bảng Bàn phím, có xem trước trực tiếp. Lưu được nhiều giao diện riêng." />
+            <TextView android:id="@+id/btnTheme" style="@style/BtnPrimary" android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="10dp" android:text="TÙY CHỈNH GIAO DIỆN" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_card"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                style="@style/SectionTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:text="TIẾT KIỆM PIN" />
 
             <TextView style="@style/SettingTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:text="Tự tắt camera khi không quét (giây)" />

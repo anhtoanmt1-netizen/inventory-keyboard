@@ -64,6 +64,9 @@ class MainActivity : Activity() {
         findViewById<TextView>(R.id.btnButtonLayout).setOnClickListener {
             startActivity(Intent(this, ButtonLayoutActivity::class.java))
         }
+        findViewById<TextView>(R.id.btnTheme).setOnClickListener {
+            startActivity(Intent(this, ThemeActivity::class.java))
+        }
         et(R.id.etDebounce).setText(p.debounceMs.toString())
         et(R.id.etScanDelay).setText(p.scanDelayMs.toString())
         et(R.id.etVibrateMs).setText(p.vibrateMs.toString())

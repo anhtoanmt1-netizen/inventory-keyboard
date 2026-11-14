@@ -82,6 +82,15 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     private lateinit var btnTools: ImageView
     private lateinit var btnArea: LinearLayout
     private var layoutSig = ""
+
+    // ---- Giao diện tùy chỉnh (xem KbTheme.kt / ThemeRender.kt) ----
+    private var themeRaw = "\u0000"            // chuỗi giao diện đã nạp; đổi là biết cần dựng lại
+    private var styleScan = PanelStyle()
+    private var styleKb = PanelStyle()
+    private val keyViews = ArrayList<View>()    // các phím đang có trên bảng gõ, để áp font / màu chữ
+    private var statusColor0 = 0
+    private var hintColor0 = 0
+    private var scanTextCaptured = false
     private var toolsCustom = false
     private lateinit var flyout: LinearLayout
     private lateinit var fCam: ImageView
@@ -400,6 +409,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     override fun onCreateInputView(): View {
         val v = layoutInflater.inflate(R.layout.keyboard_view, null)
         root = v
+        loadTheme()
         previewView = v.findViewById(R.id.previewView)
         previewView.implementationMode = PreviewView.ImplementationMode.COMPATIBLE
         overlay = v.findViewById(R.id.overlay)
@@ -468,6 +478,8 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
             panelClipHost.addView(it.view)
         }
         Fonts.apply(v)
+        applyKbTheme()   // sau Fonts.apply để font theo giao diện không bị ghi đè
+        applyScanTheme()
         applyScreenFlags()
         setMode(mode)
         updateUi()
@@ -483,6 +495,13 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         val lay = ScanLayout.fromJson(json)
         ScanButtons.forgetBitmaps()
         val m = ScanButtons.makeAll(this, lay)
+        for ((k, b) in m) {
+            ThemeRender.styleButton(
+                this, b, styleScan,
+                if (k == "tools") ThemeRender.Kind.TOGGLE else ThemeRender.Kind.NORMAL,
+                ScanButtons.hasCustomImage(this, lay, k)
+            )
+        }
         btnTools = m.getValue("tools")
         toolsCustom = ScanButtons.hasCustomImage(this, lay, "tools")
         bind(btnTools, "CÔNG CỤ: mở danh sách camera, flash, luôn sáng, giảm sáng, tự Enter. Chạm lại để thu gọn.") { toggleFlyout() }
@@ -703,7 +722,9 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         windowVisible = true
         registry.currentState = Lifecycle.State.RESUMED
         lastSeen.clear()
-        if (prefs.scanLayoutJson != layoutSig && root != null) rebuildScanButtons()
+        val themeChanged = loadTheme()
+        if (root != null && (themeChanged || prefs.scanLayoutJson != layoutSig)) rebuildScanButtons()
+        if (root != null && themeChanged) { buildTypePanel(); applyKbTheme(); applyScanTheme() }
         if (prefs.keySound) sounds()
         ingestClipboard(true) // lấy nội dung đã sao chép trong lúc bàn phím chưa chạy
         applyScreenFlags(true)
@@ -862,8 +883,48 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     // =====================================================================
     private enum class KS { NORMAL, SPECIAL, ACCENT }
 
+    /** Nạp giao diện đang dùng. Trả về true nếu khác lần trước (cần dựng lại các bảng). */
+    private fun loadTheme(): Boolean {
+        val raw = ThemeStore.raw(this)
+        if (raw == themeRaw) return false
+        themeRaw = raw
+        val t = ThemeStore.parse(raw).current()
+        styleScan = t?.scan ?: PanelStyle()
+        styleKb = t?.kb ?: PanelStyle()
+        return true
+    }
+
+    /** Nền phía sau các phím + font / màu chữ của bảng Bàn phím. */
+    private fun applyKbTheme() {
+        panelType.clipChildren = false
+        panelType.background = ThemeRender.panelBackground(this, styleKb)
+        applyKbText()
+    }
+
+    private fun applyKbText() {
+        for (k in keyViews) if (k is TextView) ThemeRender.styleText(k, styleKb)
+    }
+
+    /** Nền của bảng Scan + font của dòng trạng thái / gợi ý (bảng Scan không có chữ nào khác). */
+    private fun applyScanTheme() {
+        panelScan.background = ThemeRender.panelBackground(this, styleScan)
+        if (!scanTextCaptured) {
+            statusColor0 = tvStatus.currentTextColor
+            hintColor0 = tvHint.currentTextColor
+            scanTextCaptured = true
+        }
+        val custom = styleScan.textColor != PanelStyle().textColor
+        for ((t, c0) in listOf(tvStatus to statusColor0, tvHint to hintColor0)) {
+            Fonts.apply(t)                       // trả về font gốc trước khi áp font theo giao diện
+            t.setTextColor(c0)
+            t.setShadowLayer(0f, 0f, 0f, 0)
+            ThemeRender.styleText(t, styleScan, custom)
+        }
+    }
+
     private fun buildTypePanel() {
         panelType.removeAllViews()
+        keyViews.clear()
         letterKeys.clear()
         shiftKey = null
 
@@ -911,13 +972,16 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         panelType.addView(b)
 
         Fonts.apply(panelType)
+        applyKbText()
         refreshShift()
     }
 
     private fun newRow(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(prefs.keyRowDp.coerceIn(KEY_ROW_MIN, KEY_ROW_MAX)))
-        setPadding(0, dp(2), 0, dp(2))
+        setPadding(0, dp(styleKb.gapDp * 2 / 3), 0, dp(styleKb.gapDp * 2 / 3))
+        clipChildren = false
+        clipToPadding = false
     }
 
     private fun charRow(chars: String, letters: Boolean, pad: Boolean): LinearLayout {
@@ -928,15 +992,15 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         return r
     }
 
-    private fun keyBg(style: KS) = when (style) {
-        KS.NORMAL -> R.drawable.bg_key
-        KS.SPECIAL -> R.drawable.bg_key_special
-        KS.ACCENT -> R.drawable.bg_key_accent
+    private fun kindOf(style: KS) = when (style) {
+        KS.NORMAL -> ThemeRender.Kind.NORMAL
+        KS.SPECIAL -> ThemeRender.Kind.SPECIAL
+        KS.ACCENT -> ThemeRender.Kind.ACCENT
     }
 
     private fun place(row: LinearLayout, v: View, weight: Float) {
         val lp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, weight)
-        lp.setMargins(dp(3), 0, dp(3), 0)
+        lp.setMargins(dp(styleKb.gapDp), 0, dp(styleKb.gapDp), 0)
         row.addView(v, lp)
     }
 
@@ -945,9 +1009,11 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         tv.text = label
         tv.gravity = Gravity.CENTER
         tv.setTextColor(ContextCompat.getColor(this, R.color.text))
-        tv.textSize = if (label.length > 1) 14f else 19f
+        tv.textSize = (if (label.length > 1) 14f else 19f) * styleKb.fontScale / 100f
         tv.isClickable = true
-        tv.setBackgroundResource(keyBg(style))
+        tv.background = ThemeRender.keyBg(this, styleKb, kindOf(style))
+        ThemeRender.elevate(tv, styleKb)
+        keyViews.add(tv)
         place(row, tv, weight)
         tv.setOnClickListener { onClick() }
         pressEffect(tv, true)
@@ -958,11 +1024,13 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     private fun addIconKey(row: LinearLayout, iconRes: Int, weight: Float, style: KS, onClick: () -> Unit): ImageView {
         val iv = ImageView(this)
         iv.setImageResource(iconRes)
-        iv.imageTintList = ContextCompat.getColorStateList(this, R.color.icon_tint)
+        ThemeRender.styleIcon(iv, styleKb)
         iv.scaleType = ImageView.ScaleType.FIT_CENTER
         iv.setPadding(dp(13), dp(13), dp(13), dp(13))
         iv.isClickable = true
-        iv.setBackgroundResource(keyBg(style))
+        iv.background = ThemeRender.keyBg(this, styleKb, kindOf(style))
+        ThemeRender.elevate(iv, styleKb)
+        keyViews.add(iv)
         place(row, iv, weight)
         iv.setOnClickListener { onClick() }
         pressEffect(iv, true)

@@ -28,6 +28,11 @@
             android:name=".ButtonLayoutActivity"
             android:exported="false" />
 
+        <!-- Tùy chỉnh giao diện: phím, hình nền, font chữ, lưu nhiều giao diện -->
+        <activity
+            android:name=".ThemeActivity"
+            android:exported="false" />
+
         <!-- Bàn phím (Input Method Service) -->
         <service
             android:name=".ScannerKeyboardService"
