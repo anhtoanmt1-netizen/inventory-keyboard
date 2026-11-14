@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- Đánh dấu nhãn đã được áp kiểu chữ của giao diện (Fonts không ghi đè) -->
-    <item name="tag_themed" type="id" />
-</resources>
