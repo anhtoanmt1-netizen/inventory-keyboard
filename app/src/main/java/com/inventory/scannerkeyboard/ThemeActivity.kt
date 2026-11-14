@@ -17,6 +17,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.SeekBar
@@ -39,7 +40,7 @@ class ThemeActivity : Activity() {
     private lateinit var state: ThemeState
 
     private var scope = -1   // -1 chưa chọn, 0 bảng Scan, 1 bảng Bàn phím, 2 cả hai
-    private var group = 0    // 0 phím, 1 nền, 2 chữ, 3 hiệu ứng chạm, 4 ánh sáng
+    private var group = 0    // 0 phím, 1 nền, 2 chữ, 3 chạm, 4 ánh sáng, 5 chuyển động nền, 6 bố cục
 
     private lateinit var previewHost: LinearLayout
     private lateinit var listBox: LinearLayout
@@ -137,7 +138,10 @@ class ThemeActivity : Activity() {
         // --- Chỉnh sửa ---
         val ed = card(content, "CHỈNH SỬA")
         tabsBox = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        ed.addView(tabsBox, lp(MATCH, WRAP).apply { topMargin = dp(8) })
+        val tabScroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
+        tabScroll.addView(tabsBox, ViewGroup.LayoutParams(WRAP, WRAP))
+        ed.addView(tabScroll, lp(MATCH, WRAP).apply { topMargin = dp(8) })
+        note(ed, "Vuốt ngang thanh nhóm để xem đủ: Phím, Nền, Chữ, Chạm, Sáng, Động, Bố cục.")
         editorBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         ed.addView(editorBox)
 
@@ -256,12 +260,18 @@ class ThemeActivity : Activity() {
     private fun refreshPreview() {
         previewHost.removeAllViews()
         val t = cur()
-        // Chưa chọn phạm vi thì hiện cả hai bảng
-        if (scope != 1) previewHost.addView(ThemeRender.previewScan(this, t.scan), lp(MATCH, WRAP))
-        if (scope != 0) previewHost.addView(
-            ThemeRender.previewKeyboard(this, t.kb, min(prefs.keyRowDp, 44)),
-            lp(MATCH, WRAP).apply { topMargin = if (scope == -1 || scope == 2) dp(6) else 0 }
-        )
+        // Chưa chọn phạm vi thì hiện cả hai bảng. Chiều rộng, căn lề, một tay và nâng đáy cũng hiện ở đây.
+        val full = resources.displayMetrics.widthPixels
+        if (scope != 1) {
+            val l = lp(MATCH, WRAP)
+            ThemeRender.applyPanelLayout(l, t.scan, full, d)
+            previewHost.addView(ThemeRender.previewScan(this, t.scan), l)
+        }
+        if (scope != 0) {
+            val l = lp(MATCH, WRAP).apply { topMargin = if (scope == -1 || scope == 2) dp(6) else 0 }
+            ThemeRender.applyPanelLayout(l, t.kb, full, d)
+            previewHost.addView(ThemeRender.previewKeyboard(this, t.kb, min(prefs.keyRowDp, 44)), l)
+        }
     }
 
     private fun refreshList() {
@@ -296,8 +306,11 @@ class ThemeActivity : Activity() {
             Fonts.apply(editorBox)
             return
         }
-        val names = listOf("Phím", "Nền", "Chữ", "Chạm", "Sáng")
-        val icons = listOf(R.drawable.ic_keyboard, R.drawable.ic_palette, R.drawable.ic_tune, R.drawable.ic_sparkle, R.drawable.ic_sun)
+        val names = listOf("Phím", "Nền", "Chữ", "Chạm", "Sáng", "Động", "Bố cục")
+        val icons = listOf(
+            R.drawable.ic_keyboard, R.drawable.ic_palette, R.drawable.ic_tune, R.drawable.ic_sparkle,
+            R.drawable.ic_sun, R.drawable.ic_motion, R.drawable.ic_layout
+        )
         names.forEachIndexed { i, n ->
             val t = TextView(this).apply {
                 text = n; textSize = 12f; gravity = Gravity.CENTER; setTextColor(col(R.color.text))
@@ -310,14 +323,16 @@ class ThemeActivity : Activity() {
                 compoundDrawablePadding = dp(2)
                 setOnClickListener { group = i; rebuildEditor() }
             }
-            tabsBox.addView(t, lp(0, WRAP).apply { weight = 1f; setMargins(dp(2), 0, dp(2), 0) })
+            tabsBox.addView(t, lp(dp(68), WRAP).apply { setMargins(dp(2), 0, dp(2), 0) })
         }
         when (group) {
             0 -> buildKeys(editorBox)
             1 -> buildBackground(editorBox)
             2 -> buildFont(editorBox)
             3 -> buildTouch(editorBox)
-            else -> buildLight(editorBox)
+            4 -> buildLight(editorBox)
+            5 -> buildMotion(editorBox)
+            else -> buildLayout(editorBox)
         }
         Fonts.apply(tabsBox)
         Fonts.apply(editorBox)
@@ -459,6 +474,50 @@ class ThemeActivity : Activity() {
         val moving = FxDrawable.RGB or FxDrawable.RAINBOW or FxDrawable.GRADIENT or FxDrawable.DIFFUSE
         if ((bits and moving) != 0) seek(g, "Tốc độ chuyển màu", 1, 100, "", { it.lightSpeed }) { s, v -> s.copy(lightSpeed = v) }
         if ((bits and (FxDrawable.GLOW or FxDrawable.NEON)) != 0) seek(g, "Độ lan tỏa của quầng sáng", 0, 12, "dp", { it.lightSpread }) { s, v -> s.copy(lightSpread = v) }
+    }
+
+    /** Công tắc cho một bit trong motionFx. */
+    private fun motionSwitch(parent: LinearLayout, title: String, desc: String, bit: Int) =
+        switchRow(parent, title, desc, true, { (it.motionFx and bit) != 0 }) { s, on ->
+            s.copy(motionFx = if (on) s.motionFx or bit else s.motionFx and bit.inv())
+        }
+
+    // ------------------------------------------------------------------ Nhóm 5: hiệu ứng chuyển động nền
+    private fun buildMotion(g: LinearLayout) {
+        note(g, "Hiệu ứng nằm phía sau phím, không che chữ. Bật riêng từng cái và kết hợp tự do. Nhiều hiệu ứng cùng lúc sẽ tốn pin hơn; ứng dụng tự giảm số hạt nếu máy vẽ chậm. Phạm vi hiện tại: " + scopeName() + ".")
+        motionSwitch(g, "Sao băng", "Vệt sao băng vụt qua.", MotionBgDrawable.SHOOTING)
+        motionSwitch(g, "Đom đóm", "Đốm sáng xanh vàng chập chờn bay lượn.", MotionBgDrawable.FIREFLY)
+        motionSwitch(g, "Bong bóng nước", "Bong bóng trong suốt nổi lên.", MotionBgDrawable.BUBBLE)
+        motionSwitch(g, "Tuyết rơi", "Bông tuyết nhẹ rơi xuống.", MotionBgDrawable.SNOW)
+        motionSwitch(g, "Cánh hoa", "Cánh hoa hồng nhạt xoay rơi.", MotionBgDrawable.PETAL)
+        motionSwitch(g, "Bụi phép thuật", "Các đốm lấp lánh nhấp nháy.", MotionBgDrawable.MAGIC)
+        motionSwitch(g, "Dải cực quang", "Dải sáng xanh tím uốn lượn.", MotionBgDrawable.AURORA)
+        motionSwitch(g, "Ngân hà", "Vòng xoáy sao chậm rãi.", MotionBgDrawable.GALAXY)
+        motionSwitch(g, "Tia sáng", "Chùm tia sáng quét nhẹ từ phía trên.", MotionBgDrawable.RAYS)
+        motionSwitch(g, "Các hạt chuyển động", "Hạt nhỏ trôi lơ lửng khắp nền.", MotionBgDrawable.PARTICLES)
+        if (viewStyle().motionFx == 0) return
+        seek(g, "Tốc độ", 10, 300, "%", { it.motionSpeed }) { s, v -> s.copy(motionSpeed = v) }
+        seek(g, "Kích thước", 50, 300, "%", { it.motionSize }) { s, v -> s.copy(motionSize = v) }
+        seek(g, "Mật độ", 10, 300, "%", { it.motionDensity }) { s, v -> s.copy(motionDensity = v) }
+        seek(g, "Độ sáng", 10, 100, "%", { it.motionBrightness }) { s, v -> s.copy(motionBrightness = v) }
+        seek(g, "Độ mờ (quầng mềm quanh hạt)", 0, 10, "", { it.motionBlur }) { s, v -> s.copy(motionBlur = v) }
+    }
+
+    // ------------------------------------------------------------------ Nhóm 7: bố cục và vị trí
+    private fun buildLayout(g: LinearLayout) {
+        note(g, "Phạm vi hiện tại: " + scopeName() + ". Khung xem trước phía trên thể hiện đúng chiều rộng, căn lề và vị trí bạn chọn.")
+        if (scope != 0) {
+            seekGeneric(g, "Chiều cao hàng phím", 36, 72, "dp", { prefs.keyRowDp }) { prefs.keyRowDp = it; refreshPreview() }
+            seek(g, "Khoảng cách giữa các phím", 0, 10, "dp", { it.gapDp }) { s, v -> s.copy(gapDp = v) }
+        }
+        seek(g, "Chiều rộng tổng thể", 50, 100, "%", { it.layoutWidth }) { s, v -> s.copy(layoutWidth = v) }
+        label(g, "Căn lề")
+        chips(g, listOf("Trái", "Giữa", "Phải"), 3, { viewStyle().layoutAlign }) { i -> edit { it.copy(layoutAlign = i) } }
+        label(g, "Chế độ một tay")
+        chips(g, listOf("Tắt", "Tay trái", "Tay phải"), 3, { viewStyle().layoutOneHand }) { i -> edit { it.copy(layoutOneHand = i) } }
+        note(g, "Thu bàn phím về một bên (tối đa 75% chiều rộng) để bấm bằng một tay. Khi bật, chế độ này thay cho căn lề.")
+        seek(g, "Nâng khỏi mép dưới", 0, 48, "dp", { it.layoutBottom }) { s, v -> s.copy(layoutBottom = v) }
+        switchRow(g, "Tự tối ưu theo màn hình", "Màn hình rộng (máy tính bảng, xoay ngang) giới hạn bề rộng cho dễ bấm; màn hình nhỏ hoặc lớn tự điều chỉnh nhẹ chiều cao hàng phím.", false, { it.layoutAuto }) { s, on -> s.copy(layoutAuto = on) }
     }
 
     private fun scopeName() = when (scope) { 0 -> "bảng Scan"; 1 -> "bảng Bàn phím"; else -> "cả hai bảng" }

@@ -65,7 +65,22 @@ data class PanelStyle(
     val lightColor2: Int = 0xFFFF6BCB.toInt(),
     val lightIntensity: Int = 80,           // cường độ 10..100
     val lightSpeed: Int = 30,               // tốc độ đổi màu 1..100
-    val lightSpread: Int = 4                // độ lan tỏa / mờ của quầng sáng 0..12
+    val lightSpread: Int = 4,               // độ lan tỏa / mờ của quầng sáng 0..12
+
+    // ---- Nhóm 5: hiệu ứng chuyển động nền (nằm phía sau phím, bật / tắt riêng từng cái) ----
+    val motionFx: Int = 0,                  // bit: 1 sao băng, 2 đom đóm, 4 bong bóng, 8 tuyết, 16 cánh hoa, 32 bụi phép thuật, 64 cực quang, 128 ngân hà, 256 tia sáng, 512 hạt chuyển động
+    val motionSpeed: Int = 100,             // tốc độ 10..300 (%)
+    val motionSize: Int = 100,              // kích thước 50..300 (%)
+    val motionDensity: Int = 100,           // mật độ 10..300 (%)
+    val motionBrightness: Int = 80,         // độ sáng 10..100 (%)
+    val motionBlur: Int = 4,                // độ mờ (quầng mềm quanh hạt) 0..10
+
+    // ---- Nhóm 7: bố cục và vị trí ----
+    val layoutWidth: Int = 100,             // chiều rộng tổng thể của bảng 50..100 (%)
+    val layoutAlign: Int = 1,               // 0 trái, 1 giữa, 2 phải
+    val layoutOneHand: Int = 0,             // 0 tắt, 1 tay trái, 2 tay phải
+    val layoutAuto: Boolean = false,        // tự tối ưu theo kích thước màn hình
+    val layoutBottom: Int = 0               // nâng bảng lên khỏi mép dưới 0..48 dp
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("cornerDp", cornerDp).put("gapDp", gapDp).put("borderDp", borderDp).put("borderColor", borderColor)
@@ -84,6 +99,10 @@ data class PanelStyle(
         .put("fxColor", fxColor).put("fxIntensity", fxIntensity).put("fxDuration", fxDuration)
         .put("lightFx", lightFx).put("lightColor", lightColor).put("lightColor2", lightColor2)
         .put("lightIntensity", lightIntensity).put("lightSpeed", lightSpeed).put("lightSpread", lightSpread)
+        .put("motionFx", motionFx).put("motionSpeed", motionSpeed).put("motionSize", motionSize)
+        .put("motionDensity", motionDensity).put("motionBrightness", motionBrightness).put("motionBlur", motionBlur)
+        .put("layoutWidth", layoutWidth).put("layoutAlign", layoutAlign).put("layoutOneHand", layoutOneHand)
+        .put("layoutAuto", layoutAuto).put("layoutBottom", layoutBottom)
 
     companion object {
         fun fromJson(o: JSONObject?): PanelStyle {
@@ -136,7 +155,18 @@ data class PanelStyle(
                 lightColor2 = o.optInt("lightColor2", d.lightColor2),
                 lightIntensity = o.optInt("lightIntensity", d.lightIntensity).coerceIn(10, 100),
                 lightSpeed = o.optInt("lightSpeed", d.lightSpeed).coerceIn(1, 100),
-                lightSpread = o.optInt("lightSpread", d.lightSpread).coerceIn(0, 12)
+                lightSpread = o.optInt("lightSpread", d.lightSpread).coerceIn(0, 12),
+                motionFx = o.optInt("motionFx", d.motionFx).coerceIn(0, 1023),
+                motionSpeed = o.optInt("motionSpeed", d.motionSpeed).coerceIn(10, 300),
+                motionSize = o.optInt("motionSize", d.motionSize).coerceIn(50, 300),
+                motionDensity = o.optInt("motionDensity", d.motionDensity).coerceIn(10, 300),
+                motionBrightness = o.optInt("motionBrightness", d.motionBrightness).coerceIn(10, 100),
+                motionBlur = o.optInt("motionBlur", d.motionBlur).coerceIn(0, 10),
+                layoutWidth = o.optInt("layoutWidth", d.layoutWidth).coerceIn(50, 100),
+                layoutAlign = o.optInt("layoutAlign", d.layoutAlign).coerceIn(0, 2),
+                layoutOneHand = o.optInt("layoutOneHand", d.layoutOneHand).coerceIn(0, 2),
+                layoutAuto = o.optBoolean("layoutAuto", d.layoutAuto),
+                layoutBottom = o.optInt("layoutBottom", d.layoutBottom).coerceIn(0, 48)
             )
         }
     }

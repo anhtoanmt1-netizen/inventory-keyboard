@@ -285,9 +285,38 @@ object ThemeRender {
         if (!customImage) styleIcon(v, st)
     }
 
-    /** Hình nền cho một bảng, hoặc null nếu để mặc định (bàn phím dùng nền gốc). */
-    fun panelBackground(ctx: Context, st: PanelStyle): Drawable? =
-        if (st.bgType == 0) null else ThemeBgDrawable(ctx, st)
+    /**
+     * Nền của một bảng: hình nền (đơn sắc / gradient / ảnh) và hiệu ứng chuyển động nền xếp chồng lên nhau,
+     * tất cả nằm phía sau phím. Trả về null nếu để mặc định (bàn phím dùng nền gốc).
+     */
+    fun panelBackground(ctx: Context, st: PanelStyle): Drawable? {
+        val base: Drawable? = if (st.bgType == 0) null else ThemeBgDrawable(ctx, st)
+        if (st.motionFx == 0) return base
+        val motion = MotionBgDrawable(st, ctx.resources.displayMetrics.density)
+        return if (base == null) motion else LayerDrawable(arrayOf<Drawable>(base, motion))
+    }
+
+    /**
+     * Bố cục của cả bảng: chiều rộng tổng thể, căn trái / giữa / phải, chế độ một tay, nâng khỏi mép dưới,
+     * và tự giới hạn bề rộng trên màn hình lớn. fullPx là bề rộng khả dụng (pixel).
+     */
+    fun applyPanelLayout(lp: LinearLayout.LayoutParams, st: PanelStyle, fullPx: Int, d: Float) {
+        var pct = st.layoutWidth
+        var align = st.layoutAlign
+        when (st.layoutOneHand) {
+            1 -> { pct = min(pct, 75); align = 0 }
+            2 -> { pct = min(pct, 75); align = 2 }
+        }
+        var w = fullPx * pct / 100
+        var capped = false
+        if (st.layoutAuto && fullPx / d > 600f) {
+            val cap = (520 * d).toInt()
+            if (w > cap) { w = cap; capped = true }
+        }
+        lp.width = if (pct >= 100 && !capped) ViewGroup.LayoutParams.MATCH_PARENT else w
+        lp.gravity = when (align) { 0 -> Gravity.START; 2 -> Gravity.END; else -> Gravity.CENTER_HORIZONTAL }
+        lp.bottomMargin = (st.layoutBottom * d).toInt()
+    }
 
     // ------------------------------------------------------------------ khu vực xem trước
     private fun dp(ctx: Context, v: Int) = (v * ctx.resources.displayMetrics.density).toInt()

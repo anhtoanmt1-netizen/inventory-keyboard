@@ -649,7 +649,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
                     v.parent?.requestDisallowInterceptTouchEvent(true)
                     startY = e.rawY
                     startCam = cameraBox.height
-                    startRow = dp(prefs.keyRowDp)
+                    startRow = rowHeightPx()
                     startClip = clipPanel?.listHeight ?: dp(230)
                     if (mode == 0) showHint("Kéo lên để tăng, kéo xuống để giảm chiều cao khung quét.")
                 }
@@ -675,7 +675,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
                         mode == 0 -> prefs.cameraHeightDp = (cameraBox.height / density).toInt().coerceIn(120, 420)
                         typing() -> if (panelType.childCount > 0) {
                             val px = panelType.getChildAt(0).layoutParams.height
-                            prefs.keyRowDp = (px / density).toInt().coerceIn(KEY_ROW_MIN, KEY_ROW_MAX)
+                            prefs.keyRowDp = (px / density / autoRowScale()).toInt().coerceIn(KEY_ROW_MIN, KEY_ROW_MAX)
                         }
                         else -> clipPanel?.let { prefs.clipHeightDp = (it.listHeight / density).toInt().coerceIn(CLIP_MIN, CLIP_MAX) }
                     }
@@ -921,8 +921,27 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     }
 
     /** Nền phía sau các phím + font / màu chữ của bảng Bàn phím. */
+    /** Áp bố cục (chiều rộng, căn lề, một tay, nâng đáy) của giao diện lên một bảng. */
+    private fun applyLayoutTo(panel: View, st: PanelStyle) {
+        val lp = panel.layoutParams as? LinearLayout.LayoutParams ?: return
+        val full = (root?.width ?: 0).let { if (it > 0) it else resources.displayMetrics.widthPixels }
+        ThemeRender.applyPanelLayout(lp, st, full, resources.displayMetrics.density)
+        panel.layoutParams = lp
+    }
+
+    /** Chiều cao một hàng phím: giá trị người dùng kéo chỉnh, có hệ số tự tối ưu theo cỡ màn hình nếu bật. */
+    private fun autoRowScale(): Float {
+        if (!styleKb.layoutAuto) return 1f
+        val m = resources.displayMetrics
+        return (minOf(m.widthPixels, m.heightPixels) / m.density / 360f).coerceIn(0.9f, 1.15f)
+    }
+
+    private fun rowHeightPx(): Int =
+        dp((prefs.keyRowDp.coerceIn(KEY_ROW_MIN, KEY_ROW_MAX) * autoRowScale()).toInt())
+
     private fun applyKbTheme() {
         fxKb?.style = styleKb
+        applyLayoutTo(panelType, styleKb)
         panelType.clipChildren = false
         panelType.background = ThemeRender.panelBackground(this, styleKb)
         applyKbText()
@@ -935,6 +954,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     /** Nền của bảng Scan + font của dòng trạng thái / gợi ý (bảng Scan không có chữ nào khác). */
     private fun applyScanTheme() {
         fxScan?.style = styleScan
+        applyLayoutTo(panelScan, styleScan)
         panelScan.background = ThemeRender.panelBackground(this, styleScan)
         if (!scanTextCaptured) {
             statusColor0 = tvStatus.currentTextColor
@@ -1006,7 +1026,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
 
     private fun newRow(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
-        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(prefs.keyRowDp.coerceIn(KEY_ROW_MIN, KEY_ROW_MAX)))
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, rowHeightPx())
         setPadding(0, dp(styleKb.gapDp * 2 / 3), 0, dp(styleKb.gapDp * 2 / 3))
         clipChildren = false
         clipToPadding = false
