@@ -201,79 +201,12 @@
 
         <Space android:layout_width="match_parent" android:layout_height="6dp" />
 
-        <!-- Hàng dưới: 5 nút vuông bằng nhau, dàn đều: công cụ / xóa / Enter / cài đặt / đổi bàn phím -->
+        <!-- Hàng nút chức năng dưới: được dựng bằng code theo bố cục người dùng chọn (Tùy chỉnh nút Scan) -->
         <LinearLayout
+            android:id="@+id/btnArea"
             android:layout_width="match_parent"
-            android:layout_height="50dp"
-            android:orientation="horizontal"
-            android:paddingStart="4dp"
-            android:paddingEnd="4dp">
-            <FrameLayout
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1">
-                <ImageView
-                    android:id="@+id/btnTools"
-                    style="@style/KbIconToggle"
-                    android:layout_width="46dp"
-                    android:layout_height="46dp"
-                    android:layout_gravity="center"
-                    android:contentDescription="btnTools"
-                    android:src="@drawable/ic_tune" />
-            </FrameLayout>
-            <FrameLayout
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1">
-                <ImageView
-                    android:id="@+id/btnDel"
-                    style="@style/KbIcon"
-                    android:layout_width="46dp"
-                    android:layout_height="46dp"
-                    android:layout_gravity="center"
-                    android:contentDescription="btnDel"
-                    android:src="@drawable/ic_backspace" />
-            </FrameLayout>
-            <FrameLayout
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1">
-                <ImageView
-                    android:id="@+id/btnEnter"
-                    style="@style/KbIcon"
-                    android:layout_width="46dp"
-                    android:layout_height="46dp"
-                    android:layout_gravity="center"
-                    android:contentDescription="btnEnter"
-                    android:src="@drawable/ic_enter" />
-            </FrameLayout>
-            <FrameLayout
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1">
-                <ImageView
-                    android:id="@+id/btnSettings"
-                    style="@style/KbIcon"
-                    android:layout_width="46dp"
-                    android:layout_height="46dp"
-                    android:layout_gravity="center"
-                    android:contentDescription="btnSettings"
-                    android:src="@drawable/ic_settings" />
-            </FrameLayout>
-            <FrameLayout
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1">
-                <ImageView
-                    android:id="@+id/btnSwitch"
-                    style="@style/KbIcon"
-                    android:layout_width="46dp"
-                    android:layout_height="46dp"
-                    android:layout_gravity="center"
-                    android:contentDescription="btnSwitch"
-                    android:src="@drawable/ic_globe" />
-            </FrameLayout>
-        </LinearLayout>
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
     </LinearLayout>
 
     <!-- Thanh tìm kiếm Clipboard (hiện khi đang gõ từ khóa bằng bàn phím bên dưới) -->

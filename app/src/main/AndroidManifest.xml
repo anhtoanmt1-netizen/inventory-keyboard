@@ -23,6 +23,11 @@
             </intent-filter>
         </activity>
 
+        <!-- Tùy chỉnh bố cục và hình ảnh các nút ở bảng Scan -->
+        <activity
+            android:name=".ButtonLayoutActivity"
+            android:exported="false" />
+
         <!-- Bàn phím (Input Method Service) -->
         <service
             android:name=".ScannerKeyboardService"

@@ -61,6 +61,9 @@ class MainActivity : Activity() {
         findViewById<TextView>(R.id.btnPick).setOnClickListener {
             (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker()
         }
+        findViewById<TextView>(R.id.btnButtonLayout).setOnClickListener {
+            startActivity(Intent(this, ButtonLayoutActivity::class.java))
+        }
         et(R.id.etDebounce).setText(p.debounceMs.toString())
         et(R.id.etScanDelay).setText(p.scanDelayMs.toString())
         et(R.id.etVibrateMs).setText(p.vibrateMs.toString())

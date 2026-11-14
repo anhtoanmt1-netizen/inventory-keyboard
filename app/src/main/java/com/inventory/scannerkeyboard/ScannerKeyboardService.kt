@@ -80,6 +80,9 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     private lateinit var panelScan: View
     private lateinit var panelType: LinearLayout
     private lateinit var btnTools: ImageView
+    private lateinit var btnArea: LinearLayout
+    private var layoutSig = ""
+    private var toolsCustom = false
     private lateinit var flyout: LinearLayout
     private lateinit var fCam: ImageView
     private lateinit var fFlash: ImageView
@@ -347,7 +350,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         tvSearch = v.findViewById(R.id.tvSearch)
         panelScan = v.findViewById(R.id.panelScan)
         panelType = v.findViewById(R.id.panelType)
-        btnTools = v.findViewById(R.id.btnTools)
+        btnArea = v.findViewById(R.id.btnArea)
         flyout = v.findViewById(R.id.flyout)
         fCam = v.findViewById(R.id.fCam)
         fFlash = v.findViewById(R.id.fFlash)
@@ -364,12 +367,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         bind(v.findViewById(R.id.btnHide), "ẨN BÀN PHÍM: thu gọn bàn phím lại.") { requestHideSelf(0) }
 
         // --- Hàng dưới ---
-        bind(btnTools, "CÔNG CỤ: mở danh sách camera, flash, luôn sáng, giảm sáng, tự Enter. Chạm lại để thu gọn.") { toggleFlyout() }
-        val btnDel = v.findViewById<ImageView>(R.id.btnDel)
-        bindRepeat(btnDel, false) { handleDelete() }
-        bind(v.findViewById(R.id.btnEnter), "ENTER: gửi phím Enter thủ công vào ô đang chọn.") { finishComposing(); sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER) }
-        bind(v.findViewById(R.id.btnSettings), "CÀI ĐẶT: mở bảng tùy chỉnh chính của ứng dụng.") { openSettings() }
-        bind(v.findViewById(R.id.btnSwitch), "ĐỔI BÀN PHÍM: chuyển sang bàn phím khác, ví dụ để gõ tiếng Việt có dấu.") { showPicker() }
+        rebuildScanButtons()
 
         // --- Danh sách công cụ (tự thu lại sau khi chọn) ---
         bind(fCam, "CAMERA: bật / tắt camera quét. Nên tắt khi không dùng để tiết kiệm pin.") {
@@ -409,6 +407,28 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         setMode(mode)
         updateUi()
         return v
+    }
+
+    /**
+     * Dựng lại hàng nút chức năng dưới theo bố cục người dùng đã lưu (thứ tự, kích thước, căn lề, ảnh PNG riêng)
+     * rồi gắn lại thao tác cho từng nút.
+     */
+    private fun rebuildScanButtons() {
+        val json = prefs.scanLayoutJson
+        val lay = ScanLayout.fromJson(json)
+        ScanButtons.forgetBitmaps()
+        val m = ScanButtons.makeAll(this, lay)
+        btnTools = m.getValue("tools")
+        toolsCustom = ScanButtons.hasCustomImage(this, lay, "tools")
+        bind(btnTools, "CÔNG CỤ: mở danh sách camera, flash, luôn sáng, giảm sáng, tự Enter. Chạm lại để thu gọn.") { toggleFlyout() }
+        bindRepeat(m.getValue("del"), false) { handleDelete() }
+        bind(m.getValue("enter"), "ENTER: gửi phím Enter thủ công vào ô đang chọn.") { finishComposing(); sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER) }
+        bind(m.getValue("settings"), "CÀI ĐẶT: mở bảng tùy chỉnh chính của ứng dụng.") { openSettings() }
+        bind(m.getValue("switch"), "ĐỔI BÀN PHÍM: chuyển sang bàn phím khác.") { showPicker() }
+        btnArea.removeAllViews()
+        btnArea.addView(ScanButtons.buildRows(this, lay, m))
+        layoutSig = json
+        updateUi()
     }
 
     /** Nút thường: chạm thực hiện, giữ lâu hiện hướng dẫn, có hiệu ứng nhún nhẹ. */
@@ -569,7 +589,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         fDim.isSelected = prefs.dimScreen
         fAutoEnter.isSelected = prefs.sendEnter
         btnTools.isSelected = flyoutOpen
-        btnTools.setImageResource(if (flyoutOpen) R.drawable.ic_close else R.drawable.ic_tune)
+        if (!toolsCustom) btnTools.setImageResource(if (flyoutOpen) R.drawable.ic_close else R.drawable.ic_tune)
         tabScan.isSelected = mode == 0
         tabType.isSelected = mode == 1
         tabClip.isSelected = mode == 2
@@ -616,6 +636,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         windowVisible = true
         registry.currentState = Lifecycle.State.RESUMED
         lastSeen.clear()
+        if (prefs.scanLayoutJson != layoutSig && root != null) rebuildScanButtons()
         if (prefs.keySound) sounds()
         ingestClipboard(true) // lấy nội dung đã sao chép trong lúc bàn phím chưa chạy
         applyScreenFlags(true)

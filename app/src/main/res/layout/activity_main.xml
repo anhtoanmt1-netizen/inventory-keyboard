@@ -212,6 +212,24 @@
                 style="@style/SectionTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:text="GIAO DIỆN NÚT SCAN" />
+
+            <TextView style="@style/SettingDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Sắp xếp nút bằng kéo thả, đổi số nút mỗi hàng, kích thước, căn lề, thay hình PNG riêng cho từng nút, có xem trước trực tiếp." />
+            <TextView android:id="@+id/btnButtonLayout" style="@style/BtnPrimary" android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="10dp" android:text="TÙY CHỈNH NÚT SCAN" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_card"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                style="@style/SectionTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:text="TIẾT KIỆM PIN" />
 
             <TextView style="@style/SettingTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:text="Tự tắt camera khi không quét (giây)" />

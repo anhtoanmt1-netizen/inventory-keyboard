@@ -49,4 +49,7 @@ class Prefs(context: Context) {
 
     /** Chiều cao vùng danh sách Clipboard (dp). Kéo thanh trên cùng ở bảng Clipboard để đổi. */
     var clipHeightDp: Int get() = getI("clipHeightDp", 230); set(v) = putI("clipHeightDp", v)
+
+    /** Bố cục các nút ở hàng dưới của bảng Scan (JSON, xem ScanLayout). Rỗng = mặc định. */
+    var scanLayoutJson: String get() = sp.getString("scanLayout", "") ?: ""; set(v) { sp.edit().putString("scanLayout", v).apply() }
 }
