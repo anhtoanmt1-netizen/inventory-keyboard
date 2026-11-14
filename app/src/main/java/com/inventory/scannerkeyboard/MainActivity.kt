@@ -61,6 +61,9 @@ class MainActivity : Activity() {
         findViewById<TextView>(R.id.btnPick).setOnClickListener {
             (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker()
         }
+        findViewById<TextView>(R.id.btnTheme).setOnClickListener {
+            startActivity(Intent(this, ThemeActivity::class.java))
+        }
         findViewById<TextView>(R.id.btnButtonLayout).setOnClickListener {
             startActivity(Intent(this, ButtonLayoutActivity::class.java))
         }

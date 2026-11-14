@@ -196,7 +196,7 @@ class ButtonLayoutActivity : Activity() {
 
     private fun refreshPreview() {
         previewHost.removeAllViews()
-        previewHost.addView(ScanButtons.buildRows(this, cfg, ScanButtons.makeAll(this, cfg)))
+        previewHost.addView(ScanButtons.buildRows(this, cfg, ScanButtons.makeAll(this, cfg, ThemeStore(this).active().scan)))
     }
 
     // ------------------------------------------------------------------ danh sách nút + kéo thả

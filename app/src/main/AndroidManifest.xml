@@ -28,6 +28,11 @@
             android:name=".ButtonLayoutActivity"
             android:exported="false" />
 
+        <!-- Giao diện bàn phím: hình dạng phím, nền, chữ, bố cục, Live Preview, quản lý giao diện -->
+        <activity
+            android:name=".ThemeActivity"
+            android:exported="false" />
+
         <!-- Bàn phím (Input Method Service) -->
         <service
             android:name=".ScannerKeyboardService"

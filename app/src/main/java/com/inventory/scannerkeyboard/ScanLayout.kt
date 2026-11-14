@@ -10,7 +10,6 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Space
-import androidx.core.content.ContextCompat
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -135,13 +134,13 @@ object ScanButtons {
      * Tạo ImageView cho một nút. Có ảnh PNG riêng thì dùng ảnh đó (giữ tỉ lệ, không bị méo),
      * không thì dùng biểu tượng mặc định.
      */
-    fun makeButton(ctx: Context, lay: ScanLayout, key: String): ImageView {
+    fun makeButton(ctx: Context, lay: ScanLayout, key: String, style: StyleSet = StyleSet()): ImageView {
         val d = ctx.resources.displayMetrics.density
         val (w, h) = sizePx(ctx, lay, key)
         val c = lay.cfg(key)
         val iv = ImageView(ctx)
         iv.isClickable = true
-        iv.setBackgroundResource(if (key == "tools") R.drawable.bg_toggle else R.drawable.bg_key)
+        iv.background = KbStyler.background(ctx, style, if (key == "tools") KbStyler.Kind.TOGGLE else KbStyler.Kind.NORMAL)
         iv.scaleType = ImageView.ScaleType.FIT_CENTER
         val bmp = c.image?.let { loadBitmap(ctx, it) }
         if (bmp != null) {
@@ -157,7 +156,7 @@ object ScanButtons {
             iv.setPadding(left, top, remW - left, remH - top)
         } else {
             iv.setImageResource(ScanLayout.ICONS[key] ?: R.drawable.ic_tune)
-            iv.imageTintList = ContextCompat.getColorStateList(ctx, R.color.icon_tint)
+            iv.imageTintList = KbStyler.iconTint(style)
             // biểu tượng mặc định ~24dp ở kích thước chuẩn 46dp, lớn lên theo nút
             val icon = (minOf(w, h) * 0.52f).toInt().coerceAtLeast((12 * d).toInt())
             iv.setPadding((w - icon) / 2, (h - icon) / 2, (w - icon) / 2, (h - icon) / 2)
@@ -220,8 +219,8 @@ object ScanButtons {
         return root
     }
 
-    fun makeAll(ctx: Context, lay: ScanLayout): Map<String, ImageView> =
-        ScanLayout.KEYS.associateWith { makeButton(ctx, lay, it) }
+    fun makeAll(ctx: Context, lay: ScanLayout, style: StyleSet = StyleSet()): Map<String, ImageView> =
+        ScanLayout.KEYS.associateWith { makeButton(ctx, lay, it, style) }
 
     fun forgetBitmaps() = bitmapCache.clear()
 }

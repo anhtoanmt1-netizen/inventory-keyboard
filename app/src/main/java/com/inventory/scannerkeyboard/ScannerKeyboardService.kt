@@ -81,6 +81,13 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     private lateinit var panelType: LinearLayout
     private lateinit var btnTools: ImageView
     private lateinit var btnArea: LinearLayout
+    private lateinit var btnHide: ImageView
+    private lateinit var backdrop: BackdropView
+    private lateinit var board: View
+    private var kbStyle = StyleSet()
+    private var scanStyle = StyleSet()
+    private var themeSig = 0
+    private fun activeStyle() = if (mode == 0) scanStyle else kbStyle
     private var layoutSig = ""
     private var toolsCustom = false
     private lateinit var flyout: LinearLayout
@@ -181,6 +188,28 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
             val f = IntentFilter().apply { addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_USER_PRESENT) }
             ContextCompat.registerReceiver(this, screenReceiver, f, ContextCompat.RECEIVER_NOT_EXPORTED)
         } catch (_: Throwable) { }
+    }
+
+    // =====================================================================
+    //  GIAO DIỆN (THEME)
+    // =====================================================================
+    private fun loadTheme() {
+        val store = ThemeStore(this)
+        val t = store.active()
+        kbStyle = t.kb
+        scanStyle = t.scan
+        themeSig = store.signature()
+    }
+
+    /** Áp giao diện lên phần "khung" dùng chung: nền, vị trí bảng, nút chuyển chế độ, các nút trong danh sách công cụ. */
+    private fun applyChrome() {
+        if (!::backdrop.isInitialized || !::tvStatus.isInitialized) return
+        val s = activeStyle()
+        backdrop.setStyle(s)
+        KbStyler.applyBoardLayout(board, s)
+        listOf(tabScan, tabType, tabClip, fCam, fFlash, fKeepOn, fDim, fAutoEnter).forEach { KbStyler.styleIconButton(it, s, KbStyler.Kind.TOGGLE) }
+        KbStyler.styleIconButton(btnHide, s, KbStyler.Kind.NORMAL)
+        tvStatus.setTextColor(s.int("textColor"))
     }
 
     // =====================================================================
@@ -351,6 +380,9 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         panelScan = v.findViewById(R.id.panelScan)
         panelType = v.findViewById(R.id.panelType)
         btnArea = v.findViewById(R.id.btnArea)
+        backdrop = v.findViewById(R.id.backdrop)
+        board = v.findViewById(R.id.board)
+        loadTheme()
         flyout = v.findViewById(R.id.flyout)
         fCam = v.findViewById(R.id.fCam)
         fFlash = v.findViewById(R.id.fFlash)
@@ -364,7 +396,8 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         bind(tabScan, "QUÉT: dùng camera quét mã QR / mã vạch, mã tự nhập vào ô đang chọn.") { setMode(0) }
         bind(tabType, "GÕ PHÍM: bàn phím đầy đủ để gõ chữ, số, ký hiệu. Camera tự tắt để tiết kiệm pin.") { setMode(1) }
         bind(tabClip, "CLIPBOARD: xem lại văn bản và hình ảnh đã sao chép, chạm để dán, ghim mục quan trọng.") { setMode(2) }
-        bind(v.findViewById(R.id.btnHide), "ẨN BÀN PHÍM: thu gọn bàn phím lại.") { requestHideSelf(0) }
+        btnHide = v.findViewById(R.id.btnHide)
+        bind(btnHide, "ẨN BÀN PHÍM: thu gọn bàn phím lại.") { requestHideSelf(0) }
 
         // --- Hàng dưới ---
         rebuildScanButtons()
@@ -417,7 +450,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         val json = prefs.scanLayoutJson
         val lay = ScanLayout.fromJson(json)
         ScanButtons.forgetBitmaps()
-        val m = ScanButtons.makeAll(this, lay)
+        val m = ScanButtons.makeAll(this, lay, scanStyle)
         btnTools = m.getValue("tools")
         toolsCustom = ScanButtons.hasCustomImage(this, lay, "tools")
         bind(btnTools, "CÔNG CỤ: mở danh sách camera, flash, luôn sáng, giảm sáng, tự Enter. Chạm lại để thu gọn.") { toggleFlyout() }
@@ -621,6 +654,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         panelClipHost.visibility = if (m == 2) View.VISIBLE else View.GONE
         if (m != 0) { closeFlyout(); stopCamera() } else if (prefs.autoStart && !scanning) startCamera()
         if (m == 2) clipPanel?.onShown()
+        applyChrome()
         updateUi()
     }
 
@@ -636,6 +670,9 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         windowVisible = true
         registry.currentState = Lifecycle.State.RESUMED
         lastSeen.clear()
+        if (root != null && ThemeStore(this).signature() != themeSig) {
+            loadTheme(); buildTypePanel(); rebuildScanButtons(); applyChrome()
+        }
         if (prefs.scanLayoutJson != layoutSig && root != null) rebuildScanButtons()
         if (prefs.keySound) sounds()
         ingestClipboard(true) // lấy nội dung đã sao chép trong lúc bàn phím chưa chạy
@@ -861,15 +898,15 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         return r
     }
 
-    private fun keyBg(style: KS) = when (style) {
-        KS.NORMAL -> R.drawable.bg_key
-        KS.SPECIAL -> R.drawable.bg_key_special
-        KS.ACCENT -> R.drawable.bg_key_accent
-    }
+    private fun keyBackground(style: KS) = KbStyler.background(
+        this, kbStyle,
+        when (style) { KS.NORMAL -> KbStyler.Kind.NORMAL; KS.SPECIAL -> KbStyler.Kind.SPECIAL; KS.ACCENT -> KbStyler.Kind.ACCENT }
+    )
 
     private fun place(row: LinearLayout, v: View, weight: Float) {
         val lp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, weight)
-        lp.setMargins(dp(3), 0, dp(3), 0)
+        val half = dp(kbStyle.int("gap")) / 2
+        lp.setMargins(half, 0, half, 0)
         row.addView(v, lp)
     }
 
@@ -877,10 +914,9 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         val tv = TextView(this)
         tv.text = label
         tv.gravity = Gravity.CENTER
-        tv.setTextColor(ContextCompat.getColor(this, R.color.text))
-        tv.textSize = if (label.length > 1) 14f else 19f
+        KbStyler.styleText(tv, kbStyle, KbStyler.keyTextSize(kbStyle, label))
         tv.isClickable = true
-        tv.setBackgroundResource(keyBg(style))
+        tv.background = keyBackground(style)
         place(row, tv, weight)
         tv.setOnClickListener { onClick() }
         pressEffect(tv, true)
@@ -891,11 +927,11 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     private fun addIconKey(row: LinearLayout, iconRes: Int, weight: Float, style: KS, onClick: () -> Unit): ImageView {
         val iv = ImageView(this)
         iv.setImageResource(iconRes)
-        iv.imageTintList = ContextCompat.getColorStateList(this, R.color.icon_tint)
+        iv.imageTintList = KbStyler.iconTint(kbStyle)
         iv.scaleType = ImageView.ScaleType.FIT_CENTER
         iv.setPadding(dp(13), dp(13), dp(13), dp(13))
         iv.isClickable = true
-        iv.setBackgroundResource(keyBg(style))
+        iv.background = keyBackground(style)
         place(row, iv, weight)
         iv.setOnClickListener { onClick() }
         pressEffect(iv, true)
@@ -903,7 +939,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     }
 
     private fun addChar(row: LinearLayout, c: Char, letter: Boolean) {
-        val label = if (letter && shift > 0) c.uppercaseChar().toString() else c.toString()
+        val label = KbStyler.displayLabel(kbStyle, c, letter, shift > 0)
         val key = addKey(row, label, 1f, KS.NORMAL) { typeChar(c, letter) }
         if (letter) letterKeys.add(key to c)
     }
@@ -959,7 +995,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     }
 
     private fun refreshShift() {
-        letterKeys.forEach { (tv, c) -> tv.text = if (shift > 0) c.uppercaseChar().toString() else c.toString() }
+        letterKeys.forEach { (tv, c) -> tv.text = KbStyler.displayLabel(kbStyle, c, true, shift > 0) }
         shiftKey?.apply {
             setImageResource(if (shift == 2) R.drawable.ic_shift_lock else R.drawable.ic_shift)
             isSelected = shift > 0

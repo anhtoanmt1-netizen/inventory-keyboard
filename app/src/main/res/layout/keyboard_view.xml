@@ -1,8 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+  <!-- "Bảng" bàn phím: chiều rộng và vị trí do giao diện quyết định (bố cục, một tay) -->
+  <FrameLayout
+    android:id="@+id/board"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@color/bg"
+    android:layout_gravity="bottom">
+
+    <!-- Lớp nền (màu / chuyển màu / ảnh / hiệu ứng) nằm sau tất cả các phím -->
+    <com.inventory.scannerkeyboard.BackdropView
+        android:id="@+id/backdrop"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+<LinearLayout
+    android:id="@+id/content"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
     android:orientation="vertical"
     android:paddingBottom="4dp">
 
@@ -276,3 +293,5 @@
         android:textColor="@color/muted"
         android:textSize="10sp" />
 </LinearLayout>
+  </FrameLayout>
+</FrameLayout>

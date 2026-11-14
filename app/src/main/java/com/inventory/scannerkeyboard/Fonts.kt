@@ -35,7 +35,7 @@ object Fonts {
     }
 
     private fun walk(v: View, r: Typeface, b: Typeface) {
-        if (v is TextView) {
+        if (v is TextView && v.getTag(R.id.tag_themed) == null) {
             val wasBold = v.tag == "bold" || v.typeface?.isBold == true
             if (wasBold) v.tag = "bold"
             v.typeface = if (wasBold) b else r
