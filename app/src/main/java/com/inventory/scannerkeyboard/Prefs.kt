@@ -38,4 +38,12 @@ class Prefs(context: Context) {
 
     /** Tự tắt camera nếu quá số giây này không quét được mã nào (0 = không bao giờ). */
     var idleOffSec: Int get() = getI("idleOff", 0); set(v) = putI("idleOff", v)
+
+    /** Chiều cao mỗi hàng phím của bàn phím gõ (dp). Kéo thanh trên cùng ở chế độ GÕ PHÍM để đổi. */
+    var keyRowDp: Int get() = getI("keyRowDp", 50); set(v) = putI("keyRowDp", v)
+
+    /** Âm thanh khi gõ phím. */
+    var keySound: Boolean get() = getB("keySound", true); set(v) = putB("keySound", v)
+    var keySoundType: Int get() = getI("keySoundType", 0); set(v) = putI("keySoundType", v)
+    var keySoundVolume: Int get() = getI("keySoundVol", 60); set(v) = putI("keySoundVol", v)
 }

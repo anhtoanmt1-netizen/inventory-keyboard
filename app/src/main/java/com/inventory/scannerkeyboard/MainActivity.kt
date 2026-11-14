@@ -12,7 +12,10 @@ import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
 import android.view.inputmethod.InputMethodManager
+import android.view.Gravity
+import android.view.View
 import android.widget.CompoundButton
+import android.widget.SeekBar
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -24,6 +27,8 @@ class MainActivity : Activity() {
 
     private var prefs: Prefs? = null
     private var ready = false
+    private var keySound: KeySound? = null
+    private val soundRows = ArrayList<TextView>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,6 +74,64 @@ class MainActivity : Activity() {
         sw(R.id.swVibrate).isChecked = p.vibrate
         sw(R.id.swKeepOn).isChecked = p.keepScreenOn
         sw(R.id.swDim).isChecked = p.dimScreen
+        setupSound(p)
+    }
+
+    /** Mục "Âm thanh gõ phím": bật/tắt, 8 kiểu có nghe thử, thanh âm lượng. Lưu ngay khi thay đổi. */
+    private fun setupSound(p: Prefs) {
+        sw(R.id.swKeySound).isChecked = p.keySound
+        sw(R.id.swKeySound).setOnCheckedChangeListener { _, on -> p.keySound = on }
+        val list = findViewById<LinearLayout>(R.id.soundList)
+        val d = resources.displayMetrics.density
+        soundRows.clear()
+        KeySound.NAMES.forEachIndexed { i, name ->
+            val tv = TextView(this).apply {
+                text = "▶  ${i + 1}. $name"
+                textSize = 14f
+                gravity = Gravity.CENTER_VERTICAL
+                setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text))
+                setBackgroundResource(R.drawable.bg_toggle)
+                isClickable = true
+                setPadding((14 * d).toInt(), 0, (14 * d).toInt(), 0)
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (46 * d).toInt())
+                    .apply { topMargin = (6 * d).toInt() }
+                setOnClickListener {
+                    p.keySoundType = i
+                    markSound(i)
+                    ensureSound()?.play(i, p.keySoundVolume)
+                }
+            }
+            soundRows.add(tv)
+            list.addView(tv)
+        }
+        markSound(p.keySoundType)
+        ensureSound() // nạp sẵn để lần nghe thử đầu tiên không bị lỡ
+        val sb = findViewById<SeekBar>(R.id.sbVolume)
+        val tvVol = findViewById<TextView>(R.id.tvVolume)
+        sb.progress = p.keySoundVolume
+        tvVol.text = "Âm lượng: ${p.keySoundVolume}%"
+        sb.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(s: SeekBar?, v: Int, fromUser: Boolean) {
+                p.keySoundVolume = v
+                tvVol.text = "Âm lượng: $v%"
+            }
+            override fun onStartTrackingTouch(s: SeekBar?) {}
+            override fun onStopTrackingTouch(s: SeekBar?) { ensureSound()?.play(p.keySoundType, p.keySoundVolume) }
+        })
+    }
+
+    private fun markSound(sel: Int) {
+        soundRows.forEachIndexed { i, tv -> tv.isSelected = i == sel }
+    }
+
+    private fun ensureSound(): KeySound? {
+        if (keySound == null) keySound = try { KeySound(this) } catch (_: Throwable) { null }
+        return keySound
+    }
+
+    override fun onDestroy() {
+        keySound?.release()
+        super.onDestroy()
     }
 
     private fun et(id: Int) = findViewById<EditText>(id)

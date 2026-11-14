@@ -6,6 +6,19 @@
     android:orientation="vertical"
     android:paddingBottom="4dp">
 
+    <!-- Thanh kéo chỉnh chiều cao (trên cùng): chế độ QUÉT chỉnh khung camera, chế độ GÕ PHÍM chỉnh độ cao phím -->
+    <FrameLayout
+        android:id="@+id/dragHandle"
+        android:layout_width="match_parent"
+        android:layout_height="26dp">
+
+        <View
+            android:layout_width="52dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center"
+            android:background="@drawable/bg_handle" />
+    </FrameLayout>
+
     <!-- Hàng trên: QUÉT / GÕ PHÍM / ẨN (chỉ biểu tượng, 3 nút bằng nhau) -->
     <LinearLayout
         android:layout_width="match_parent"
@@ -176,66 +189,80 @@
             </LinearLayout>
         </FrameLayout>
 
-        <!-- Thanh kéo chỉnh chiều cao khung quét -->
-        <FrameLayout
-            android:id="@+id/dragHandle"
-            android:layout_width="match_parent"
-            android:layout_height="24dp">
+        <Space android:layout_width="match_parent" android:layout_height="6dp" />
 
-            <View
-                android:layout_width="46dp"
-                android:layout_height="5dp"
-                android:layout_gravity="center"
-                android:background="@drawable/bg_handle" />
-        </FrameLayout>
-
-        <!-- Hàng dưới duy nhất: công cụ / xóa / Enter / đổi bàn phím -->
+        <!-- Hàng dưới: 5 nút vuông bằng nhau, dàn đều: công cụ / xóa / Enter / cài đặt / đổi bàn phím -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="46dp"
+            android:layout_height="50dp"
             android:orientation="horizontal"
-            android:paddingStart="5dp"
-            android:paddingEnd="5dp">
-            <ImageView
-                android:id="@+id/btnTools"
-                style="@style/KbIconToggle"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp">
+            <FrameLayout
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_marginStart="3dp"
-                android:layout_marginEnd="3dp"
-                android:layout_weight="1"
-                android:contentDescription="btnTools"
-                android:src="@drawable/ic_tune" />
-            <ImageView
-                android:id="@+id/btnDel"
-                style="@style/KbIcon"
+                android:layout_weight="1">
+                <ImageView
+                    android:id="@+id/btnTools"
+                    style="@style/KbIconToggle"
+                    android:layout_width="46dp"
+                    android:layout_height="46dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="btnTools"
+                    android:src="@drawable/ic_tune" />
+            </FrameLayout>
+            <FrameLayout
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_marginStart="3dp"
-                android:layout_marginEnd="3dp"
-                android:layout_weight="1"
-                android:contentDescription="btnDel"
-                android:src="@drawable/ic_backspace" />
-            <ImageView
-                android:id="@+id/btnEnter"
-                style="@style/KbIcon"
+                android:layout_weight="1">
+                <ImageView
+                    android:id="@+id/btnDel"
+                    style="@style/KbIcon"
+                    android:layout_width="46dp"
+                    android:layout_height="46dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="btnDel"
+                    android:src="@drawable/ic_backspace" />
+            </FrameLayout>
+            <FrameLayout
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_marginStart="3dp"
-                android:layout_marginEnd="3dp"
-                android:layout_weight="1"
-                android:contentDescription="btnEnter"
-                android:src="@drawable/ic_enter" />
-            <ImageView
-                android:id="@+id/btnSwitch"
-                style="@style/KbIcon"
+                android:layout_weight="1">
+                <ImageView
+                    android:id="@+id/btnEnter"
+                    style="@style/KbIcon"
+                    android:layout_width="46dp"
+                    android:layout_height="46dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="btnEnter"
+                    android:src="@drawable/ic_enter" />
+            </FrameLayout>
+            <FrameLayout
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_marginStart="3dp"
-                android:layout_marginEnd="3dp"
-                android:layout_weight="1"
-                android:contentDescription="btnSwitch"
-                android:src="@drawable/ic_globe" />
+                android:layout_weight="1">
+                <ImageView
+                    android:id="@+id/btnSettings"
+                    style="@style/KbIcon"
+                    android:layout_width="46dp"
+                    android:layout_height="46dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="btnSettings"
+                    android:src="@drawable/ic_settings" />
+            </FrameLayout>
+            <FrameLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1">
+                <ImageView
+                    android:id="@+id/btnSwitch"
+                    style="@style/KbIcon"
+                    android:layout_width="46dp"
+                    android:layout_height="46dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="btnSwitch"
+                    android:src="@drawable/ic_globe" />
+            </FrameLayout>
         </LinearLayout>
     </LinearLayout>
 

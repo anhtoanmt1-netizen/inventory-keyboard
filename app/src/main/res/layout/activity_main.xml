@@ -231,6 +231,42 @@
                 style="@style/SectionTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:text="ÂM THANH GÕ PHÍM" />
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:gravity="center_vertical" android:orientation="horizontal">
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                    <TextView style="@style/SettingTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Bật âm thanh khi gõ phím" />
+                    <TextView style="@style/SettingDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Phát tiếng ngay khi chạm phím ở chế độ GÕ PHÍM." />
+                </LinearLayout>
+                <Switch android:id="@+id/swKeySound" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="12dp" />
+            </LinearLayout>
+
+            <TextView style="@style/SettingTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:text="Chọn kiểu âm thanh" />
+            <TextView style="@style/SettingDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Chạm vào một kiểu để nghe thử và chọn." />
+            <LinearLayout
+                android:id="@+id/soundList"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="vertical" />
+
+            <TextView android:id="@+id/tvVolume" style="@style/SettingTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:text="Âm lượng" />
+            <TextView style="@style/SettingDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Âm lượng riêng của tiếng gõ phím, tính trên âm lượng đa phương tiện của máy." />
+            <SeekBar android:id="@+id/sbVolume" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:max="100" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_card"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                style="@style/SectionTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:text="THỬ NGHIỆM" />
 
             <TextView style="@style/SettingDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Chạm vào ô bên dưới để mở bàn phím, rồi quét thử một mã." />
@@ -258,10 +294,10 @@
                 android:layout_marginTop="10dp"
                 android:lineSpacingExtra="4dp"
                 android:text="• Hàng trên: biểu tượng khung quét = QUÉT, biểu tượng bàn phím = GÕ PHÍM, mũi tên xuống = ẨN bàn phím.
-• Hàng dưới: biểu tượng thanh trượt mở danh sách (camera, flash, luôn sáng, giảm sáng, tự Enter); kế bên là XÓA, ENTER, ĐỔI BÀN PHÍM.
+• Hàng dưới: công cụ (camera, flash, luôn sáng, giảm sáng, tự Enter), XÓA, ENTER, CÀI ĐẶT (bánh răng), ĐỔI BÀN PHÍM.
 • Giữ lâu một biểu tượng để xem hướng dẫn chức năng.
-• Kéo thanh nhỏ dưới khung camera để chỉnh chiều cao.
-• Muốn gõ tiếng Việt có dấu: dùng biểu tượng quả địa cầu để đổi sang bàn phím khác."
+• Kéo thanh nhỏ trên cùng của bàn phím để chỉnh chiều cao: khung camera (chế độ QUÉT) hoặc hàng phím (chế độ GÕ PHÍM).
+• Chế độ GÕ PHÍM có nút VN / EN: VN gõ tiếng Việt kiểu Telex (aa=â, aw=ă, ee=ê, oo=ô, ow=ơ, uw=ư, dd=đ; s f r x j = sắc huyền hỏi ngã nặng; z = xóa dấu), EN gõ tiếng Anh. Mặc định là VN."
                 android:textColor="@color/text"
                 android:textSize="13sp" />
 

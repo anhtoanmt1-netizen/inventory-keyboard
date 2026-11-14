@@ -96,6 +96,19 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     private val letterKeys = ArrayList<Pair<TextView, Char>>()
     private var shiftKey: ImageView? = null
 
+    // --- Gõ tiếng Việt (Telex) và âm thanh phím ---
+    private val telex = TelexEngine()
+    private var vn = true                 // mặc định tiếng Việt mỗi khi bàn phím được tạo
+    private var lastComposeAt = 0L
+    private var soundHolder: KeySound? = null
+    private fun sounds(): KeySound? {
+        if (soundHolder == null) soundHolder = try { KeySound(this) } catch (_: Throwable) { null }
+        return soundHolder
+    }
+    private fun keyClick() {
+        if (prefs.keySound) sounds()?.play(prefs.keySoundType, prefs.keySoundVolume)
+    }
+
     private var repeatAction: (() -> Unit)? = null
     private val repeatRunnable = object : Runnable {
         override fun run() { repeatAction?.invoke(); handler.postDelayed(this, 55) }
@@ -128,12 +141,16 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         }
     }
 
+    private val KEY_ROW_MIN = 36
+    private val KEY_ROW_MAX = 72
+
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     override fun onCreate() {
         super.onCreate()
         registry.currentState = Lifecycle.State.CREATED
         prefs = Prefs(this)
+        vn = true
         try {
             val f = IntentFilter().apply { addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_USER_PRESENT) }
             ContextCompat.registerReceiver(this, screenReceiver, f, ContextCompat.RECEIVER_NOT_EXPORTED)
@@ -141,6 +158,25 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     }
 
     override fun onEvaluateFullscreenMode(): Boolean = false
+
+    override fun onStartInputView(info: android.view.inputmethod.EditorInfo?, restarting: Boolean) {
+        super.onStartInputView(info, restarting)
+        telex.reset() // sang ô nhập khác: bỏ từ đang gõ dở
+    }
+
+    /** Người dùng chạm sang chỗ khác trong ô nhập → kết thúc từ đang gõ dở. */
+    override fun onUpdateSelection(
+        oldSelStart: Int, oldSelEnd: Int, newSelStart: Int, newSelEnd: Int,
+        candidatesStart: Int, candidatesEnd: Int
+    ) {
+        super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
+        if (!telex.isEmpty && SystemClock.elapsedRealtime() - lastComposeAt > 150 &&
+            (newSelStart != candidatesEnd || newSelEnd != candidatesEnd)
+        ) {
+            telex.reset()
+            currentInputConnection?.finishComposingText()
+        }
+    }
 
     // =====================================================================
     //  GIAO DIỆN
@@ -176,8 +212,9 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         // --- Hàng dưới ---
         bind(btnTools, "CÔNG CỤ: mở danh sách camera, flash, luôn sáng, giảm sáng, tự Enter. Chạm lại để thu gọn.") { toggleFlyout() }
         val btnDel = v.findViewById<ImageView>(R.id.btnDel)
-        bindRepeat(btnDel) { sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL) }
-        bind(v.findViewById(R.id.btnEnter), "ENTER: gửi phím Enter thủ công vào ô đang chọn.") { sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER) }
+        bindRepeat(btnDel, false) { handleDelete() }
+        bind(v.findViewById(R.id.btnEnter), "ENTER: gửi phím Enter thủ công vào ô đang chọn.") { finishComposing(); sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER) }
+        bind(v.findViewById(R.id.btnSettings), "CÀI ĐẶT: mở bảng tùy chỉnh chính của ứng dụng.") { openSettings() }
         bind(v.findViewById(R.id.btnSwitch), "ĐỔI BÀN PHÍM: chuyển sang bàn phím khác, ví dụ để gõ tiếng Việt có dấu.") { showPicker() }
 
         // --- Danh sách công cụ (tự thu lại sau khi chọn) ---
@@ -216,10 +253,13 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         pressEffect(view)
     }
 
-    private fun pressEffect(view: View) {
+    private fun pressEffect(view: View, sound: Boolean = false) {
         view.setOnTouchListener { v, e ->
             when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> v.animate().scaleX(0.94f).scaleY(0.94f).setDuration(70).start()
+                MotionEvent.ACTION_DOWN -> {
+                    if (sound) keyClick()
+                    v.animate().scaleX(0.94f).scaleY(0.94f).setDuration(70).start()
+                }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> v.animate().scaleX(1f).scaleY(1f).setDuration(110).start()
             }
             false
@@ -227,10 +267,11 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     }
 
     /** Nút giữ để lặp lại (phím xóa). */
-    private fun bindRepeat(view: View, action: () -> Unit) {
+    private fun bindRepeat(view: View, sound: Boolean, action: () -> Unit) {
         view.setOnTouchListener { v, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    if (sound) keyClick()
                     v.isPressed = true
                     v.animate().scaleX(0.94f).scaleY(0.94f).setDuration(70).start()
                     action()
@@ -296,27 +337,53 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
 
     private fun closeFlyoutSoon() { handler.postDelayed({ closeFlyout() }, 260) }
 
-    /** Kéo thanh nhỏ dưới khung camera: kéo lên = cao hơn, kéo xuống = thấp hơn. */
+    /**
+     * Thanh kéo trên cùng: kéo lên = cao hơn, kéo xuống = thấp hơn.
+     * Chế độ QUÉT chỉnh chiều cao khung camera; chế độ GÕ PHÍM chỉnh chiều cao hàng phím.
+     */
     private fun setupDragHandle(handle: View) {
         var startY = 0f
-        var startH = 0
-        handle.setOnTouchListener { _, e ->
+        var startCam = 0
+        var startRow = 0
+        handle.setOnTouchListener { v, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    startY = e.rawY; startH = cameraBox.height
-                    showHint("Kéo lên để tăng, kéo xuống để giảm chiều cao khung quét.")
+                    v.parent?.requestDisallowInterceptTouchEvent(true)
+                    startY = e.rawY
+                    startCam = cameraBox.height
+                    startRow = dp(prefs.keyRowDp)
+                    if (mode == 0) showHint("Kéo lên để tăng, kéo xuống để giảm chiều cao khung quét.")
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    val h = (startH + (startY - e.rawY)).toInt().coerceIn(dp(120), dp(420))
-                    cameraBox.layoutParams.height = h
-                    cameraBox.requestLayout()
+                    val dy = startY - e.rawY
+                    if (mode == 0) {
+                        cameraBox.layoutParams.height = (startCam + dy).toInt().coerceIn(dp(120), dp(420))
+                        cameraBox.requestLayout()
+                    } else {
+                        // 5 hàng phím: chia đều độ chênh cho từng hàng
+                        val h = (startRow + dy / 5f).toInt().coerceIn(dp(KEY_ROW_MIN), dp(KEY_ROW_MAX))
+                        for (i in 0 until panelType.childCount) panelType.getChildAt(i).layoutParams.height = h
+                        panelType.requestLayout()
+                    }
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    prefs.cameraHeightDp = (cameraBox.height / resources.displayMetrics.density).toInt().coerceIn(120, 420)
+                    if (mode == 0) {
+                        prefs.cameraHeightDp = (cameraBox.height / resources.displayMetrics.density).toInt().coerceIn(120, 420)
+                    } else if (panelType.childCount > 0) {
+                        val px = panelType.getChildAt(0).layoutParams.height
+                        prefs.keyRowDp = (px / resources.displayMetrics.density).toInt().coerceIn(KEY_ROW_MIN, KEY_ROW_MAX)
+                    }
                 }
             }
             true
         }
+    }
+
+    private fun openSettings() {
+        try {
+            startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            requestHideSelf(0)
+        } catch (_: Throwable) { say("Không mở được màn hình cài đặt.") }
     }
 
     private fun updateUi() {
@@ -369,6 +436,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         windowVisible = true
         registry.currentState = Lifecycle.State.RESUMED
         lastSeen.clear()
+        if (prefs.keySound) sounds()
         applyScreenFlags(true)
         if (mode == 0 && prefs.autoStart && !scanning && root != null) startCamera()
     }
@@ -376,6 +444,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     override fun onWindowHidden() {
         super.onWindowHidden()
         windowVisible = false
+        telex.reset()
         if (::flyout.isInitialized) { flyoutOpen = false; flyout.visibility = View.GONE }
         stopCamera()
         applyScreenFlags(false)
@@ -390,6 +459,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         analyzer.close()
         executor.shutdown()
         tone?.release()
+        soundHolder?.release()
         super.onDestroy()
     }
 
@@ -490,6 +560,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         lastSeen[code] = busyUntil
         lastActivity = now
 
+        finishComposing()
         ic.commitText(code, 1)
         if (prefs.sendEnter) {
             handler.postDelayed({ sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER) }, enterDelay.toLong()) // đúng 1 Enter cho mỗi mã
@@ -557,11 +628,12 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
 
         val b = newRow()
         addKey(b, if (layer == 0) "?123" else "ABC", 1.5f, KS.SPECIAL) { layer = if (layer == 0) 1 else 0; buildTypePanel() }
+        addKey(b, if (vn) "VN" else "EN", 1.2f, KS.SPECIAL) { finishComposing(); vn = !vn; buildTypePanel() }
         addIconKey(b, R.drawable.ic_globe, 1.2f, KS.SPECIAL) { showPicker() }
         addKey(b, ",", 1f, KS.NORMAL) { type(",") }
-        addKey(b, "", 4f, KS.NORMAL) { type(" ") }          // phím cách
+        addKey(b, "", 3f, KS.NORMAL) { type(" ") }          // phím cách
         addKey(b, ".", 1f, KS.NORMAL) { type(".") }
-        addIconKey(b, R.drawable.ic_enter, 1.5f, KS.ACCENT) { sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER) }
+        addIconKey(b, R.drawable.ic_enter, 1.5f, KS.ACCENT) { finishComposing(); sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER) }
         panelType.addView(b)
 
         Fonts.apply(panelType)
@@ -570,7 +642,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
 
     private fun newRow(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
-        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50))
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(prefs.keyRowDp.coerceIn(KEY_ROW_MIN, KEY_ROW_MAX)))
         setPadding(0, dp(2), 0, dp(2))
     }
 
@@ -604,7 +676,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         tv.setBackgroundResource(keyBg(style))
         place(row, tv, weight)
         tv.setOnClickListener { onClick() }
-        pressEffect(tv)
+        pressEffect(tv, true)
         return tv
     }
 
@@ -619,7 +691,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         iv.setBackgroundResource(keyBg(style))
         place(row, iv, weight)
         iv.setOnClickListener { onClick() }
-        pressEffect(iv)
+        pressEffect(iv, true)
         return iv
     }
 
@@ -631,15 +703,45 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
 
     private fun addRepeatKey(row: LinearLayout, weight: Float) {
         val iv = addIconKey(row, R.drawable.ic_backspace, weight, KS.SPECIAL) { }
-        bindRepeat(iv) { sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL) }
+        bindRepeat(iv, true) { handleDelete() }
     }
 
-    private fun type(s: String) { currentInputConnection?.commitText(s, 1) }
+    /** Chèn văn bản thường (kết thúc từ Telex đang gõ dở trước). */
+    private fun type(s: String) {
+        finishComposing()
+        currentInputConnection?.commitText(s, 1)
+    }
 
     private fun typeChar(c: Char, letter: Boolean) {
         val ch = if (letter && shift > 0) c.uppercaseChar() else c
-        type(ch.toString())
+        if (vn && letter) telexKey(ch) else type(ch.toString())
         if (letter && shift == 1) { shift = 0; refreshShift() }
+    }
+
+    private fun telexKey(ch: Char) {
+        val ic = currentInputConnection ?: return
+        telex.push(ch)
+        ic.setComposingText(telex.text(), 1)
+        lastComposeAt = SystemClock.elapsedRealtime()
+    }
+
+    /** Chốt từ đang gõ dở (giữ nguyên chữ đã hiện). */
+    private fun finishComposing() {
+        if (!telex.isEmpty) {
+            telex.reset()
+            currentInputConnection?.finishComposingText()
+        }
+    }
+
+    /** Xóa: nếu đang gõ dở một từ Telex thì bỏ phím cuối của từ đó, ngược lại xóa ký tự như bình thường. */
+    private fun handleDelete() {
+        if (!telex.isEmpty) {
+            telex.backspace()
+            currentInputConnection?.setComposingText(if (telex.isEmpty) "" else telex.text(), 1)
+            lastComposeAt = SystemClock.elapsedRealtime()
+        } else {
+            sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
+        }
     }
 
     private fun toggleShift() {
