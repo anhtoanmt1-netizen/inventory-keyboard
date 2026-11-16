@@ -40,7 +40,7 @@ class ThemeActivity : Activity() {
     private lateinit var state: ThemeState
 
     private var scope = -1   // -1 chưa chọn, 0 bảng Scan, 1 bảng Bàn phím, 2 cả hai
-    private var group = 0    // 0 phím, 1 nền, 2 chữ, 3 chạm, 4 ánh sáng, 5 chuyển động nền, 6 bố cục
+    private var group = 0    // 0 phím, 1 nền, 2 chữ, 3 chạm, 4 ánh sáng, 5 chuyển động nền, 6 bố cục, 7 phím Space
 
     private lateinit var previewHost: LinearLayout
     private lateinit var listBox: LinearLayout
@@ -141,7 +141,7 @@ class ThemeActivity : Activity() {
         val tabScroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
         tabScroll.addView(tabsBox, ViewGroup.LayoutParams(WRAP, WRAP))
         ed.addView(tabScroll, lp(MATCH, WRAP).apply { topMargin = dp(8) })
-        note(ed, "Vuốt ngang thanh nhóm để xem đủ: Phím, Nền, Chữ, Chạm, Sáng, Động, Bố cục.")
+        note(ed, "Vuốt ngang thanh nhóm để xem đủ: Phím, Nền, Chữ, Chạm, Sáng, Động, Bố cục, Space.")
         editorBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         ed.addView(editorBox)
 
@@ -209,25 +209,20 @@ class ThemeActivity : Activity() {
         }
     }
 
-    /** Thanh trượt có nhãn giá trị. Chạm vào nhãn để nhập số chính xác. */
+    /** Thanh trượt có nhãn giá trị, nút − / + ở hai đầu, rung nhẹ khi đổi giá trị. Chạm vào nhãn để nhập số chính xác. */
     private fun seekGeneric(parent: LinearLayout, title: String, min: Int, max: Int, unit: String, getCur: () -> Int, onChange: (Int) -> Unit) {
         val tv = TextView(this).apply { textSize = 14f; setTextColor(col(R.color.text)); setTypeface(null, Typeface.BOLD) }
         fun show(v: Int) { tv.text = "$title: $v$unit  ✎" }
         val start = getCur().coerceIn(min, max)
         show(start)
         parent.addView(tv, lp(WRAP, WRAP).apply { topMargin = dp(14) })
-        val sb = SeekBar(this).apply { this.max = max - min; progress = start - min }
+        val sr = SeekRow(this, min, max, start) { v -> show(v); onChange(v) }
         tv.setOnClickListener {
-            ColorPickerDialog.askNumber(this, title, unit, min, max, sb.progress + min) { v ->
-                sb.progress = v - min; show(v); onChange(v)
+            ColorPickerDialog.askNumber(this, title, unit, min, max, sr.value) { v ->
+                sr.set(v); show(v); onChange(v)
             }
         }
-        sb.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) { if (fromUser) { show(p + min); onChange(p + min) } }
-            override fun onStartTrackingTouch(s: SeekBar?) {}
-            override fun onStopTrackingTouch(s: SeekBar?) {}
-        })
-        parent.addView(sb, lp(MATCH, WRAP).apply { topMargin = dp(4) })
+        parent.addView(sr.view, lp(MATCH, WRAP).apply { topMargin = dp(4) })
     }
 
     private fun seek(parent: LinearLayout, title: String, min: Int, max: Int, unit: String, get: (PanelStyle) -> Int, set: (PanelStyle, Int) -> PanelStyle) =
@@ -262,15 +257,15 @@ class ThemeActivity : Activity() {
         val t = cur()
         // Chưa chọn phạm vi thì hiện cả hai bảng. Chiều rộng, căn lề, một tay và nâng đáy cũng hiện ở đây.
         val full = resources.displayMetrics.widthPixels
-        if (scope != 1) {
+        if (scope != 1 && group != 7) {
             val l = lp(MATCH, WRAP)
             ThemeRender.applyPanelLayout(l, t.scan, full, d)
             previewHost.addView(ThemeRender.previewScan(this, t.scan), l)
         }
-        if (scope != 0) {
-            val l = lp(MATCH, WRAP).apply { topMargin = if (scope == -1 || scope == 2) dp(6) else 0 }
+        if (scope != 0 || group == 7) {
+            val l = lp(MATCH, WRAP).apply { topMargin = if ((scope == -1 || scope == 2) && group != 7) dp(6) else 0 }
             ThemeRender.applyPanelLayout(l, t.kb, full, d)
-            previewHost.addView(ThemeRender.previewKeyboard(this, t.kb, min(prefs.keyRowDp, 44)), l)
+            previewHost.addView(ThemeRender.previewKeyboard(this, t.kb, min(prefs.keyRowDp, 44), t.space), l)
         }
     }
 
@@ -306,10 +301,10 @@ class ThemeActivity : Activity() {
             Fonts.apply(editorBox)
             return
         }
-        val names = listOf("Phím", "Nền", "Chữ", "Chạm", "Sáng", "Động", "Bố cục")
+        val names = listOf("Phím", "Nền", "Chữ", "Chạm", "Sáng", "Động", "Bố cục", "Space")
         val icons = listOf(
             R.drawable.ic_keyboard, R.drawable.ic_palette, R.drawable.ic_tune, R.drawable.ic_sparkle,
-            R.drawable.ic_sun, R.drawable.ic_motion, R.drawable.ic_layout
+            R.drawable.ic_sun, R.drawable.ic_motion, R.drawable.ic_layout, R.drawable.ic_space
         )
         names.forEachIndexed { i, n ->
             val t = TextView(this).apply {
@@ -332,7 +327,8 @@ class ThemeActivity : Activity() {
             3 -> buildTouch(editorBox)
             4 -> buildLight(editorBox)
             5 -> buildMotion(editorBox)
-            else -> buildLayout(editorBox)
+            6 -> buildLayout(editorBox)
+            else -> buildSpace(editorBox)
         }
         Fonts.apply(tabsBox)
         Fonts.apply(editorBox)
@@ -520,6 +516,125 @@ class ThemeActivity : Activity() {
         switchRow(g, "Tự tối ưu theo màn hình", "Màn hình rộng (máy tính bảng, xoay ngang) giới hạn bề rộng cho dễ bấm; màn hình nhỏ hoặc lớn tự điều chỉnh nhẹ chiều cao hàng phím.", false, { it.layoutAuto }) { s, on -> s.copy(layoutAuto = on) }
     }
 
+    // ------------------------------------------------------------------ Nhóm 8: phím Space
+    /** Áp một thay đổi lên kiểu phím Space của giao diện đang dùng, lưu ngay và cập nhật xem trước. */
+    private fun editSpace(f: (SpaceStyle) -> SpaceStyle) {
+        val t = cur()
+        val nt = t.copy(space = f(t.space))
+        state = state.copy(themes = state.themes.map { if (it.id == nt.id) nt else it })
+        ThemeStore.save(this, state)
+        refreshPreview()
+    }
+
+    /** Dòng chọn màu cho một giá trị bất kỳ (không gắn với PanelStyle). */
+    private fun colorPick(parent: LinearLayout, title: String, withAlpha: Boolean, get: () -> Int, set: (Int) -> Unit) {
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        row.addView(TextView(this).apply { text = title; textSize = 14f; setTextColor(col(R.color.text)); setTypeface(null, Typeface.BOLD) }, lp(0, WRAP).apply { weight = 1f })
+        val sw = View(this)
+        fun paint() {
+            sw.background = GradientDrawable().apply { setColor(get()); cornerRadius = dp(8).toFloat(); setStroke(dp(1), 0x66FFFFFF) }
+        }
+        paint()
+        sw.isClickable = true
+        sw.setOnClickListener { ColorPickerDialog.show(this, title, get(), withAlpha) { c -> set(c); paint() } }
+        row.addView(sw, lp(dp(56), dp(34)))
+        parent.addView(row, lp(MATCH, WRAP).apply { topMargin = dp(14) })
+    }
+
+    private fun switchPick(parent: LinearLayout, title: String, desc: String, rebuild: Boolean, get: () -> Boolean, set: (Boolean) -> Unit) {
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        texts.addView(TextView(this).apply { text = title; textSize = 14f; setTextColor(col(R.color.text)); setTypeface(null, Typeface.BOLD) })
+        if (desc.isNotEmpty()) texts.addView(TextView(this).apply { text = desc; textSize = 12f; setTextColor(col(R.color.muted)) })
+        row.addView(texts, lp(0, WRAP).apply { weight = 1f })
+        val sw = Switch(this).apply { isChecked = get() }
+        sw.setOnCheckedChangeListener { _, on -> set(on); if (rebuild) rebuildEditor() }
+        row.addView(sw)
+        parent.addView(row, lp(MATCH, WRAP).apply { topMargin = dp(14) })
+    }
+
+    private fun spaceSeek(g: LinearLayout, title: String, min: Int, max: Int, unit: String, get: (SpaceStyle) -> Int, set: (SpaceStyle, Int) -> SpaceStyle) =
+        seekGeneric(g, title, min, max, unit, { get(cur().space) }) { v -> editSpace { set(it, v) } }
+
+    private fun buildSpace(g: LinearLayout) {
+        val sp = cur().space
+        note(g, "Phím Space nằm ở hàng dưới của bảng Bàn phím. Phần này áp dụng cho giao diện \"${cur().name}\", không phụ thuộc phạm vi đã chọn ở trên. Khung xem trước phía trên thể hiện đúng phím Space.")
+
+        label(g, "CHỨC NĂNG", 12)
+        switchPick(g, "Vuốt để di chuyển con trỏ", "Đặt ngón tay lên phím Space rồi vuốt trái / phải để dịch con trỏ trong ô nhập.", true,
+            { cur().space.swipe }) { on -> editSpace { it.copy(swipe = on) } }
+        if (sp.swipe) {
+            spaceSeek(g, "Quãng vuốt cho mỗi ký tự (nhỏ = nhạy hơn)", 6, 40, "dp", { it.swipeStep }) { s, v -> s.copy(swipeStep = v) }
+            switchPick(g, "Rung nhẹ mỗi bước", "Rung theo từng ký tự con trỏ di chuyển (theo cường độ rung phím trong cài đặt).", false,
+                { cur().space.swipeHaptic }) { on -> editSpace { it.copy(swipeHaptic = on) } }
+        }
+        spaceSeek(g, "Độ rộng phím Space (÷10 = số lần phím chữ)", 20, 70, "", { it.weight }) { s, v -> s.copy(weight = v) }
+
+        label(g, "GIAO DIỆN RIÊNG", 22)
+        switchPick(g, "Dùng giao diện riêng cho phím Space", "Tắt: phím Space giống các phím chữ thường.", true,
+            { cur().space.custom }) { on -> editSpace { it.copy(custom = on) } }
+        if (!sp.custom) return
+
+        spaceSeek(g, "Bo góc", 0, 30, "dp", { it.cornerDp }) { s, v -> s.copy(cornerDp = v) }
+        spaceSeek(g, "Độ dày viền", 0, 4, "dp", { it.borderDp }) { s, v -> s.copy(borderDp = v) }
+        colorPick(g, "Màu viền", true, { cur().space.borderColor }) { c -> editSpace { it.copy(borderColor = c) } }
+        colorPick(g, "Màu phím", false, { cur().space.color }) { c -> editSpace { it.copy(color = c) } }
+        spaceSeek(g, "Độ đặc của phím", 20, 100, "%", { it.alpha }) { s, v -> s.copy(alpha = v) }
+        spaceSeek(g, "Độ sâu 3D (cạnh nổi)", 0, 8, "dp", { it.depthDp }) { s, v -> s.copy(depthDp = v) }
+        spaceSeek(g, "Bóng đổ (độ nổi)", 0, 10, "dp", { it.shadowDp }) { s, v -> s.copy(shadowDp = v) }
+        colorPick(g, "Màu bóng đổ", false, { cur().space.shadowColor }) { c -> editSpace { it.copy(shadowColor = c) } }
+        spaceSeek(g, "Độ bóng phản chiếu", 0, 60, "%", { it.glossPct }) { s, v -> s.copy(glossPct = v) }
+
+        label(g, "ẢNH TRÊN PHÍM", 22)
+        val has = sp.image != null
+        note(g, if (has) "Đã chọn ảnh cho phím Space." else "Chưa chọn ảnh. Ảnh được lấy từ thư viện của thiết bị và hiện bên dưới chữ, bo góc theo phím.")
+        val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        r.addView(button(if (has) "ĐỔI ẢNH" else "TẢI ẢNH LÊN", true) { pickSpaceImage() }, lp(0, dp(44)).apply { weight = 1f; setMargins(0, 0, dp(4), 0) })
+        if (has) r.addView(button("BỎ ẢNH", false) {
+            editSpace { it.copy(image = null) }
+            ThemeStore.cleanupImages(this, state)
+            SpaceRender.forget()
+            rebuildEditor()
+        }, lp(0, dp(44)).apply { weight = 1f; setMargins(dp(4), 0, 0, 0) })
+        g.addView(r, lp(MATCH, WRAP).apply { topMargin = dp(8) })
+        if (has) {
+            label(g, "Chế độ hiển thị")
+            chips(g, listOf("Phủ kín", "Vừa khít", "Kéo giãn"), 3, { cur().space.imgMode }) { i -> editSpace { it.copy(imgMode = i) }; rebuildEditor() }
+            spaceSeek(g, "Độ đặc của ảnh", 10, 100, "%", { it.imgAlpha }) { s, v -> s.copy(imgAlpha = v) }
+            if (sp.imgMode == 0) {
+                spaceSeek(g, "Vị trí ngang", 0, 100, "%", { it.imgPosX }) { s, v -> s.copy(imgPosX = v) }
+                spaceSeek(g, "Vị trí dọc", 0, 100, "%", { it.imgPosY }) { s, v -> s.copy(imgPosY = v) }
+            }
+        }
+
+        label(g, "CHỮ TRÊN PHÍM", 22)
+        chips(g, listOf("Không chữ", "Chữ tự đặt", "Ngôn ngữ"), 3, { cur().space.labelMode }) { i -> editSpace { it.copy(labelMode = i) }; rebuildEditor() }
+        if (sp.labelMode != 0) {
+            if (sp.labelMode == 1) {
+                val tv = TextView(this).apply {
+                    text = "Nội dung: ${sp.labelText}  ✎"; textSize = 14f; setTextColor(col(R.color.text)); setTypeface(null, Typeface.BOLD)
+                    isClickable = true
+                    setOnClickListener { askName("Chữ trên phím Space", cur().space.labelText) { n -> editSpace { it.copy(labelText = n.take(24)) }; rebuildEditor() } }
+                }
+                g.addView(tv, lp(WRAP, WRAP).apply { topMargin = dp(14) })
+            }
+            spaceSeek(g, "Cỡ chữ", 8, 28, "sp", { it.labelSize }) { s, v -> s.copy(labelSize = v) }
+            colorPick(g, "Màu chữ", false, { cur().space.labelColor }) { c -> editSpace { it.copy(labelColor = c) } }
+            label(g, "Kiểu font")
+            chips(g, ThemeRender.FAMILY_NAMES, 4, { cur().space.fontFamily }) { i -> editSpace { it.copy(fontFamily = i) } }
+            spaceSeek(g, "Độ đậm / mảnh", 300, 800, "", { it.fontWeight }) { s, v -> s.copy(fontWeight = v) }
+            spaceSeek(g, "Khoảng cách chữ (x0,01 em)", 0, 40, "", { it.letterSpacing }) { s, v -> s.copy(letterSpacing = v) }
+            spaceSeek(g, "Bóng chữ", 0, 8, "", { it.labelShadow }) { s, v -> s.copy(labelShadow = v) }
+        }
+
+        g.addView(button("KHÔI PHỤC PHÍM SPACE", false) {
+            editSpace { SpaceStyle() }
+            ThemeStore.cleanupImages(this, state)
+            SpaceRender.forget()
+            rebuildEditor()
+        }, lp(MATCH, dp(44)).apply { topMargin = dp(18) })
+    }
+
     private fun scopeName() = when (scope) { 0 -> "bảng Scan"; 1 -> "bảng Bàn phím"; else -> "cả hai bảng" }
 
     // ------------------------------------------------------------------ quản lý giao diện
@@ -537,7 +652,7 @@ class ThemeActivity : Activity() {
     }
 
     private fun addTheme(name: String, from: KbTheme?) {
-        val t = KbTheme(ThemeStore.newId(), name, from?.scan ?: PanelStyle(), from?.kb ?: PanelStyle())
+        val t = KbTheme(ThemeStore.newId(), name, from?.scan ?: PanelStyle(), from?.kb ?: PanelStyle(), from?.space ?: SpaceStyle())
         state = ThemeState(t.id, state.themes + t)
         ThemeStore.save(this, state)
         refreshAll()
@@ -602,11 +717,27 @@ class ThemeActivity : Activity() {
         } catch (_: Throwable) { Toast.makeText(this, "Không mở được thư viện ảnh.", Toast.LENGTH_SHORT).show() }
     }
 
+    private fun pickSpaceImage() {
+        try {
+            startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*"), 79)
+        } catch (_: Throwable) { Toast.makeText(this, "Không mở được thư viện ảnh.", Toast.LENGTH_SHORT).show() }
+    }
+
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         val uri = data?.data
-        if (requestCode != 78 || resultCode != RESULT_OK || uri == null) return
+        if (resultCode != RESULT_OK || uri == null) return
+        if (requestCode == 79) {
+            val n = importBackground(uri, "sp")
+            if (n == null) { Toast.makeText(this, "Không đọc được ảnh này.", Toast.LENGTH_SHORT).show(); return }
+            editSpace { it.copy(image = n, custom = true) }
+            ThemeStore.cleanupImages(this, state)
+            SpaceRender.forget()
+            rebuildEditor()
+            return
+        }
+        if (requestCode != 78) return
         val name = importBackground(uri)
         if (name == null) { Toast.makeText(this, "Không đọc được ảnh này.", Toast.LENGTH_SHORT).show(); return }
         edit { it.copy(bgType = 3, bgImage = name) }
@@ -616,7 +747,7 @@ class ThemeActivity : Activity() {
     }
 
     /** Đọc ảnh, xoay theo EXIF, thu nhỏ (tối đa ~1280px) để nhẹ máy, rồi lưu vào bộ nhớ riêng của ứng dụng. */
-    private fun importBackground(uri: Uri): String? {
+    private fun importBackground(uri: Uri, prefix: String = "bg"): String? {
         return try {
             val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
@@ -634,7 +765,7 @@ class ThemeActivity : Activity() {
             val rot = when (orientation) { 6 -> 90f; 3 -> 180f; 8 -> 270f; else -> 0f }
             if (rot != 0f) bmp = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, Matrix().apply { postRotate(rot) }, true)
             val png = bmp.hasAlpha()
-            val name = "bg_${System.currentTimeMillis()}." + (if (png) "png" else "jpg")
+            val name = "${prefix}_${System.currentTimeMillis()}." + (if (png) "png" else "jpg")
             FileOutputStream(File(ThemeStore.imageDir(this), name)).use {
                 bmp.compress(if (png) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG, 90, it)
             }

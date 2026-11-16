@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.view.Gravity
-import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -14,8 +13,9 @@ import androidx.core.content.ContextCompat
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import kotlin.math.min
 
-/** Cấu hình riêng của một nút trên bảng Scan. */
+/** Cấu hình riêng của một nút trên bàn phím. */
 data class BtnCfg(
     val image: String? = null,   // tên file PNG trong thư mục btn_images (null = biểu tượng mặc định)
     val imgW: Int = 0,           // kích thước ảnh (px), 0 = tự vừa khít nút
@@ -26,12 +26,19 @@ data class BtnCfg(
 )
 
 /**
- * Bố cục các nút ở hàng chức năng dưới bảng Scan. Lưu dạng JSON trong Prefs, dùng chung cho
- * bàn phím thật và khu vực xem trước trong màn hình chỉnh sửa.
+ * Bố cục các nút chức năng, chia làm ba khu vực:
+ *  - HÀNG TRÊN: hiện ở mọi chế độ (Quét / Gõ phím / Clipboard);
+ *  - HÀNG DƯỚI: nằm dưới khung camera ở bảng Scan;
+ *  - NHÓM CÔNG CỤ: các nút mở ra khi bấm nút Công cụ.
+ * Mỗi nút nằm đúng một khu vực, di chuyển được giữa các khu vực. Lưu dạng JSON trong Prefs,
+ * dùng chung cho bàn phím thật và khu vực xem trước trong màn hình chỉnh sửa.
  */
 data class ScanLayout(
-    val order: List<String> = DEFAULT_ORDER,
-    val perRow: Int = 5,          // số nút mỗi hàng (1..5)
+    val top: List<String> = DEFAULT_TOP,
+    val bottom: List<String> = DEFAULT_BOTTOM,
+    val tools: List<String> = DEFAULT_TOOLS,
+    val perRowTop: Int = 7,       // số nút mỗi hàng ở khu vực trên (1..10)
+    val perRowBottom: Int = 6,    // số nút mỗi hàng ở khu vực dưới (1..10)
     val widthDp: Int = 46,        // chiều rộng nút (dp)
     val heightDp: Int = 46,       // chiều cao nút (dp)
     val scale: Int = 100,         // thu phóng chung (%)
@@ -47,28 +54,91 @@ data class ScanLayout(
         const val ALIGN_BETWEEN = 3   // dàn đều: hai đầu sát mép, khoảng giữa bằng nhau
         const val ALIGN_AROUND = 4    // cách đều: có khoảng ở cả hai đầu
 
-        val KEYS = listOf("tools", "del", "enter", "settings", "switch")
-        val DEFAULT_ORDER = KEYS
+        const val MAX_PER_ROW = 10
+
+        const val AREA_TOP = 0
+        const val AREA_BOTTOM = 1
+        const val AREA_TOOLS = 2
+
+        val DEFAULT_TOP = listOf("tools", "scan", "type", "clip", "settings", "switch", "hide")
+        val DEFAULT_BOTTOM = listOf("cam", "flash", "keepOn", "dim", "del", "enter")
+        val DEFAULT_TOOLS = listOf("autoEnter", "sound", "soundPick")
+
+        /** Mọi nút có trên bàn phím; mỗi nút xuất hiện đúng một lần ở một trong ba khu vực. */
+        val KEYS = DEFAULT_TOP + DEFAULT_BOTTOM + DEFAULT_TOOLS
+
+        /** Nút có trạng thái bật / tắt (dùng nền kiểu công tắc, đổi màu khi đang bật). */
+        val TOGGLES = setOf("tools", "scan", "type", "clip", "cam", "flash", "keepOn", "dim", "autoEnter", "sound")
+        fun isToggle(key: String) = key in TOGGLES
+
         val LABELS = mapOf(
-            "tools" to "Công cụ", "del" to "Xóa", "enter" to "Enter",
-            "settings" to "Cài đặt", "switch" to "Đổi bàn phím"
+            "tools" to "Công cụ", "scan" to "Quét (Scan)", "type" to "Bàn phím", "clip" to "Clipboard",
+            "settings" to "Cài đặt", "switch" to "Đổi bàn phím", "hide" to "Ẩn bàn phím",
+            "cam" to "Bật / tắt camera", "flash" to "Đèn flash", "keepOn" to "Luôn sáng", "dim" to "Giảm độ sáng",
+            "del" to "Xóa", "enter" to "Enter",
+            "autoEnter" to "Tự động Enter", "sound" to "Âm thanh bàn phím", "soundPick" to "Chọn nhanh âm thanh"
         )
+
         val ICONS = mapOf(
-            "tools" to R.drawable.ic_tune, "del" to R.drawable.ic_backspace, "enter" to R.drawable.ic_enter,
-            "settings" to R.drawable.ic_settings, "switch" to R.drawable.ic_globe
+            "tools" to R.drawable.ic_tune, "scan" to R.drawable.ic_scan, "type" to R.drawable.ic_keyboard,
+            "clip" to R.drawable.ic_clipboard, "settings" to R.drawable.ic_settings, "switch" to R.drawable.ic_globe,
+            "hide" to R.drawable.ic_chevron_down,
+            "cam" to R.drawable.ic_camera, "flash" to R.drawable.ic_flash, "keepOn" to R.drawable.ic_sun,
+            "dim" to R.drawable.ic_moon, "del" to R.drawable.ic_backspace, "enter" to R.drawable.ic_enter,
+            "autoEnter" to R.drawable.ic_enter_auto, "sound" to R.drawable.ic_volume, "soundPick" to R.drawable.ic_music
         )
+
+        /** Hướng dẫn hiện ra khi giữ lâu một nút. */
+        val HINTS = mapOf(
+            "tools" to "CÔNG CỤ: mở nhóm công cụ (tự Enter, âm thanh phím, chọn nhanh âm thanh...). Chạm lại để thu gọn.",
+            "scan" to "QUÉT: dùng camera quét mã QR / mã vạch, mã tự nhập vào ô đang chọn.",
+            "type" to "GÕ PHÍM: bàn phím đầy đủ để gõ chữ, số, ký hiệu. Camera tự tắt để tiết kiệm pin.",
+            "clip" to "CLIPBOARD: xem lại văn bản và hình ảnh đã sao chép, chạm để dán, ghim mục quan trọng.",
+            "settings" to "CÀI ĐẶT: mở bảng tùy chỉnh chính của ứng dụng.",
+            "switch" to "ĐỔI BÀN PHÍM: chuyển sang bàn phím khác (dùng chung cho mọi bảng).",
+            "hide" to "ẨN BÀN PHÍM: thu gọn bàn phím lại.",
+            "cam" to "CAMERA: bật / tắt camera quét. Nên tắt khi không dùng để tiết kiệm pin.",
+            "flash" to "FLASH: bật / tắt đèn pin khi quét nơi thiếu sáng. Chỉ dùng được khi camera đang bật.",
+            "keepOn" to "LUÔN SÁNG: giữ màn hình không tự tắt khi bàn phím đang hiện.",
+            "dim" to "GIẢM SÁNG: hạ độ sáng màn hình xuống mức đã đặt (mặc định 50%). Chỉnh mức trong ứng dụng.",
+            "del" to "XÓA: xóa ký tự trước con trỏ. Giữ để xóa liên tục, càng giữ lâu càng nhanh.",
+            "enter" to "ENTER: gửi phím Enter thủ công vào ô đang chọn.",
+            "autoEnter" to "TỰ ENTER: tự gửi Enter sau mỗi mã quét được. Tắt nếu chỉ muốn chèn mã.",
+            "sound" to "ÂM THANH PHÍM: bật / tắt âm thanh khi gõ phím.",
+            "soundPick" to "CHỌN NHANH ÂM THANH: chọn kiểu âm thanh gõ phím và nghe thử ngay."
+        )
+
+        private fun readList(a: JSONArray?, seen: MutableSet<String>, allowTools: Boolean): List<String> {
+            val out = ArrayList<String>()
+            if (a == null) return out
+            for (i in 0 until a.length()) {
+                val k = a.optString(i, "")
+                if (k !in KEYS || k in seen) continue
+                if (!allowTools && k == "tools") continue   // nút Công cụ không nằm trong chính nhóm Công cụ
+                seen.add(k)
+                out.add(k)
+            }
+            return out
+        }
 
         fun fromJson(text: String?): ScanLayout {
             if (text.isNullOrBlank()) return ScanLayout()
             return try {
                 val o = JSONObject(text)
                 val d = ScanLayout()
-                val ord = ArrayList<String>()
-                o.optJSONArray("order")?.let { a -> for (i in 0 until a.length()) if (a.getString(i) in KEYS && a.getString(i) !in ord) ord.add(a.getString(i)) }
-                for (k in KEYS) if (k !in ord) ord.add(k) // nút thiếu thì thêm lại, không bao giờ mất nút
+                val seen = HashSet<String>()
+                val t = readList(o.optJSONArray("top"), seen, true).toMutableList()
+                val b = readList(o.optJSONArray("bottom"), seen, true).toMutableList()
+                val tl = readList(o.optJSONArray("tools"), seen, false).toMutableList()
+                // Nút thiếu (bản cài đặt cũ hoặc dữ liệu hỏng) thì trả về đúng khu vực mặc định: không bao giờ mất nút.
+                for (k in KEYS) if (k !in seen) when (k) {
+                    in DEFAULT_TOP -> t.add(k)
+                    in DEFAULT_BOTTOM -> b.add(k)
+                    else -> tl.add(k)
+                }
                 val btns = HashMap<String, BtnCfg>()
-                o.optJSONObject("buttons")?.let { b ->
-                    for (k in KEYS) b.optJSONObject(k)?.let { x ->
+                o.optJSONObject("buttons")?.let { bo ->
+                    for (k in KEYS) bo.optJSONObject(k)?.let { x ->
                         btns[k] = BtnCfg(
                             image = if (x.has("image") && !x.isNull("image")) x.getString("image") else null,
                             imgW = x.optInt("imgW", 0).coerceIn(0, 400), imgH = x.optInt("imgH", 0).coerceIn(0, 400),
@@ -78,7 +148,10 @@ data class ScanLayout(
                     }
                 }
                 ScanLayout(
-                    ord, o.optInt("perRow", d.perRow).coerceIn(1, 5), o.optInt("w", d.widthDp).coerceIn(32, 96),
+                    t, b, tl,
+                    o.optInt("pTop", d.perRowTop).coerceIn(1, MAX_PER_ROW),
+                    o.optInt("pBot", d.perRowBottom).coerceIn(1, MAX_PER_ROW),
+                    o.optInt("w", d.widthDp).coerceIn(32, 96),
                     o.optInt("h", d.heightDp).coerceIn(32, 96), o.optInt("scale", d.scale).coerceIn(60, 160),
                     o.optInt("gap", d.gapDp).coerceIn(0, 24), o.optInt("align", d.align).coerceIn(0, 4),
                     o.optBoolean("grid", d.grid), btns
@@ -91,13 +164,39 @@ data class ScanLayout(
 
     fun withButton(key: String, c: BtnCfg): ScanLayout = copy(buttons = buttons + (key to c))
 
+    /** Danh sách nút của một khu vực. */
+    fun listFor(area: Int): List<String> = when (area) { AREA_TOP -> top; AREA_BOTTOM -> bottom; else -> tools }
+
+    /** Nút đang nằm ở khu vực nào. */
+    fun areaOf(key: String): Int = when (key) {
+        in top -> AREA_TOP
+        in bottom -> AREA_BOTTOM
+        else -> AREA_TOOLS
+    }
+
+    fun withList(area: Int, l: List<String>): ScanLayout = when (area) {
+        AREA_TOP -> copy(top = l)
+        AREA_BOTTOM -> copy(bottom = l)
+        else -> copy(tools = l)
+    }
+
+    /** Chuyển một nút sang khu vực khác (thêm vào cuối). Nút Công cụ không được nằm trong nhóm Công cụ. */
+    fun moved(key: String, to: Int): ScanLayout {
+        if (to == AREA_TOOLS && key == "tools") return this
+        if (areaOf(key) == to) return this
+        val cleaned = copy(top = top - key, bottom = bottom - key, tools = tools - key)
+        return cleaned.withList(to, cleaned.listFor(to) + key)
+    }
+
     fun toJson(): String {
         val b = JSONObject()
         for ((k, c) in buttons) b.put(
             k, JSONObject().put("image", c.image ?: JSONObject.NULL).put("imgW", c.imgW).put("imgH", c.imgH)
                 .put("ha", c.imgH_align).put("va", c.imgV_align).put("scale", c.scale)
         )
-        return JSONObject().put("order", JSONArray(order)).put("perRow", perRow).put("w", widthDp).put("h", heightDp)
+        return JSONObject().put("ver", 2)
+            .put("top", JSONArray(top)).put("bottom", JSONArray(bottom)).put("tools", JSONArray(tools))
+            .put("pTop", perRowTop).put("pBot", perRowBottom).put("w", widthDp).put("h", heightDp)
             .put("scale", scale).put("gap", gapDp).put("align", align).put("grid", grid).put("buttons", b).toString()
     }
 
@@ -119,11 +218,28 @@ object ScanButtons {
         } catch (_: Throwable) { null }
     }
 
+    /**
+     * Bề rộng tối đa của một nút để đủ chỗ cho nhiều nút trên một hàng (đặc biệt khi chọn 8 - 10 nút mỗi hàng
+     * trên màn hình nhỏ). Nút tự thu hẹp chiều ngang cho vừa, chiều cao giữ nguyên.
+     */
+    private fun maxWidthPx(ctx: Context, lay: ScanLayout, key: String): Int {
+        val per = when (key) {
+            in lay.top -> lay.perRowTop
+            in lay.bottom -> lay.perRowBottom
+            else -> return Int.MAX_VALUE   // nhóm Công cụ cuộn ngang, không cần thu hẹp
+        }
+        val d = ctx.resources.displayMetrics.density
+        val avail = ctx.resources.displayMetrics.widthPixels - (8 * d).toInt()
+        val gap = if (lay.grid) 0 else (lay.gapDp * d).toInt()
+        return (avail / per - (2 * d).toInt() - gap).coerceAtLeast((24 * d).toInt())
+    }
+
     /** Kích thước thật của nút (px) sau khi nhân thu phóng chung và thu phóng riêng. */
     fun sizePx(ctx: Context, lay: ScanLayout, key: String): Pair<Int, Int> {
         val d = ctx.resources.displayMetrics.density
         val k = lay.scale / 100f * lay.cfg(key).scale / 100f
-        return Pair((lay.widthDp * d * k).toInt().coerceAtLeast(1), (lay.heightDp * d * k).toInt().coerceAtLeast(1))
+        val w = min((lay.widthDp * d * k).toInt().coerceAtLeast(1), maxWidthPx(ctx, lay, key))
+        return Pair(w, (lay.heightDp * d * k).toInt().coerceAtLeast(1))
     }
 
     fun hasCustomImage(ctx: Context, lay: ScanLayout, key: String): Boolean {
@@ -141,7 +257,7 @@ object ScanButtons {
         val c = lay.cfg(key)
         val iv = ImageView(ctx)
         iv.isClickable = true
-        iv.setBackgroundResource(if (key == "tools") R.drawable.bg_toggle else R.drawable.bg_key)
+        iv.setBackgroundResource(if (ScanLayout.isToggle(key)) R.drawable.bg_toggle else R.drawable.bg_key)
         iv.scaleType = ImageView.ScaleType.FIT_CENTER
         val bmp = c.image?.let { loadBitmap(ctx, it) }
         if (bmp != null) {
@@ -159,21 +275,21 @@ object ScanButtons {
             iv.setImageResource(ScanLayout.ICONS[key] ?: R.drawable.ic_tune)
             iv.imageTintList = ContextCompat.getColorStateList(ctx, R.color.icon_tint)
             // biểu tượng mặc định ~24dp ở kích thước chuẩn 46dp, lớn lên theo nút
-            val icon = (minOf(w, h) * 0.52f).toInt().coerceAtLeast((12 * d).toInt())
+            val icon = (min(w, h) * 0.52f).toInt().coerceAtLeast((12 * d).toInt())
             iv.setPadding((w - icon) / 2, (h - icon) / 2, (w - icon) / 2, (h - icon) / 2)
         }
         iv.layoutParams = LinearLayout.LayoutParams(w, h)
         return iv
     }
 
-    /** Dựng toàn bộ các hàng nút (dọc, mỗi hàng ngang) từ danh sách nút đã tạo sẵn. */
-    fun buildRows(ctx: Context, lay: ScanLayout, buttons: Map<String, ImageView>): LinearLayout {
+    /** Dựng các hàng nút (dọc, mỗi hàng ngang) cho danh sách [keys], mỗi hàng tối đa [per] nút. */
+    fun buildRows(ctx: Context, lay: ScanLayout, buttons: Map<String, ImageView>, keys: List<String>, per: Int): LinearLayout {
         val d = ctx.resources.displayMetrics.density
         val root = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
-        val keys = lay.order.filter { buttons.containsKey(it) }
-        val per = lay.perRow.coerceIn(1, 5)
+        val usable = keys.filter { buttons.containsKey(it) }
+        val n = per.coerceIn(1, ScanLayout.MAX_PER_ROW)
         val gap = (lay.gapDp * d / 2).toInt()
-        for (chunk in keys.chunked(per)) {
+        for (chunk in usable.chunked(n)) {
             val row = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -183,7 +299,7 @@ object ScanButtons {
             if (lay.grid) {
                 // Căn theo cột: mỗi ô rộng bằng nhau, nút nằm trong ô theo kiểu căn lề đã chọn
                 val g = when (lay.align) { ScanLayout.ALIGN_LEFT -> Gravity.START; ScanLayout.ALIGN_RIGHT -> Gravity.END; else -> Gravity.CENTER_HORIZONTAL }
-                for (i in 0 until per) {
+                for (i in 0 until n) {
                     val cell = FrameLayout(ctx)
                     val key = chunk.getOrNull(i)
                     if (key != null) {
@@ -218,6 +334,20 @@ object ScanButtons {
             root.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, rowH + (4 * d).toInt()))
         }
         return root
+    }
+
+    /** Dựng nhóm Công cụ: một dải nút nằm ngang (cuộn ngang được nếu nhiều nút). */
+    fun buildStrip(ctx: Context, buttons: Map<String, ImageView>, keys: List<String>): LinearLayout {
+        val d = ctx.resources.displayMetrics.density
+        val strip = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        for (k in keys) {
+            val b = buttons[k] ?: continue
+            (b.parent as? ViewGroup)?.removeView(b)
+            strip.addView(b, LinearLayout.LayoutParams(b.layoutParams.width, b.layoutParams.height).apply {
+                setMargins((3 * d).toInt(), 0, (3 * d).toInt(), 0)
+            })
+        }
+        return strip
     }
 
     fun makeAll(ctx: Context, lay: ScanLayout): Map<String, ImageView> =

@@ -4,8 +4,12 @@ import android.content.Context
 
 /** Cài đặt dùng chung giữa màn hình cài đặt (MainActivity) và bàn phím (Service). */
 class Prefs(context: Context) {
+    companion object {
+        const val NAME = "scanner_prefs"
+    }
+
     private val sp = context.applicationContext
-        .getSharedPreferences("scanner_prefs", Context.MODE_PRIVATE)
+        .getSharedPreferences(NAME, Context.MODE_PRIVATE)
 
     private fun getI(k: String, d: Int) = sp.getInt(k, d)
     private fun putI(k: String, v: Int) = sp.edit().putInt(k, v).apply()
@@ -56,4 +60,10 @@ class Prefs(context: Context) {
 
     /** Bố cục các nút ở hàng dưới của bảng Scan (JSON, xem ScanLayout). Rỗng = mặc định. */
     var scanLayoutJson: String get() = sp.getString("scanLayout", "") ?: ""; set(v) { sp.edit().putString("scanLayout", v).apply() }
+
+    /** Tùy chọn cho nhà phát triển: đã mở khóa chưa (nhấn 5 lần vào logo SPX ở màn hình cài đặt). */
+    var devUnlocked: Boolean get() = getB("devUnlocked", false); set(v) = putB("devUnlocked", v)
+
+    /** Kiểu chữ và hiệu ứng của dòng "Created by" (JSON, xem CreditView). Rỗng = mặc định. */
+    var creditJson: String get() = sp.getString("credit", "") ?: ""; set(v) { sp.edit().putString("credit", v).apply() }
 }

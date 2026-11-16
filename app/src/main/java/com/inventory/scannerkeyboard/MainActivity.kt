@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
 import android.view.inputmethod.InputMethodManager
@@ -20,6 +21,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.content.ContextCompat
 
 /** Màn hình cài đặt Keyboard Scan - SPX. */
@@ -67,6 +69,10 @@ class MainActivity : Activity() {
         findViewById<TextView>(R.id.btnTheme).setOnClickListener {
             startActivity(Intent(this, ThemeActivity::class.java))
         }
+        findViewById<TextView>(R.id.btnTransfer).setOnClickListener {
+            startActivity(Intent(this, TransferActivity::class.java))
+        }
+        setupDevUnlock(p)
         et(R.id.etDebounce).setText(p.debounceMs.toString())
         et(R.id.etScanDelay).setText(p.scanDelayMs.toString())
         et(R.id.etVibrateMs).setText(p.vibrateMs.toString())
@@ -100,10 +106,12 @@ class MainActivity : Activity() {
                 val x = v.coerceAtLeast(1)
                 p.keyHapticStrength = x
                 tv.text = "Cường độ rung: $x%"
+                if (fromUser) SeekAssist.tick(this@MainActivity)
             }
             override fun onStartTrackingTouch(s: SeekBar?) {}
             override fun onStopTrackingTouch(s: SeekBar?) { Haptics.tick(this@MainActivity, p.keyHapticStrength) }
         })
+        SeekAssist.wrap(sb)   // nút − / + ở hai đầu thanh, mỗi lần bấm rung thử đúng cường độ mới
     }
 
     /** Mục "Âm thanh gõ phím": bật/tắt, 8 kiểu có nghe thử, thanh âm lượng. Lưu ngay khi thay đổi. */
@@ -143,10 +151,44 @@ class MainActivity : Activity() {
             override fun onProgressChanged(s: SeekBar?, v: Int, fromUser: Boolean) {
                 p.keySoundVolume = v
                 tvVol.text = "Âm lượng: $v%"
+                if (fromUser) SeekAssist.tick(this@MainActivity)
             }
             override fun onStartTrackingTouch(s: SeekBar?) {}
             override fun onStopTrackingTouch(s: SeekBar?) { ensureSound()?.play(p.keySoundType, p.keySoundVolume) }
         })
+        SeekAssist.wrap(sb) { ensureSound()?.play(p.keySoundType, p.keySoundVolume) }
+    }
+
+    // ------------------------------------------------------------------ Tùy chọn cho nhà phát triển (ẩn)
+    private var logoTaps = 0
+    private var lastLogoTap = 0L
+
+    /** Nhấn liên tiếp 5 lần vào logo SPX ở góc trên bên trái để mở; nhấn thêm 5 lần để ẩn. */
+    private fun setupDevUnlock(p: Prefs) {
+        applyDev(p)
+        findViewById<View>(R.id.imgLogo).setOnClickListener {
+            val now = SystemClock.uptimeMillis()
+            logoTaps = if (now - lastLogoTap <= 1200L) logoTaps + 1 else 1
+            lastLogoTap = now
+            if (logoTaps >= 5) {
+                logoTaps = 0
+                p.devUnlocked = !p.devUnlocked
+                applyDev(p)
+                Toast.makeText(
+                    this,
+                    if (p.devUnlocked) "Đã mở Tùy chọn cho nhà phát triển" else "Đã ẩn Tùy chọn cho nhà phát triển",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    private fun applyDev(p: Prefs) {
+        val host = findViewById<LinearLayout>(R.id.devHost)
+        if (p.devUnlocked) {
+            if (host.childCount == 0) DevOptions.build(this, host, p)
+            host.visibility = View.VISIBLE
+        } else host.visibility = View.GONE
     }
 
     private fun markSound(sel: Int) {

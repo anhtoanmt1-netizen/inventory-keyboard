@@ -19,56 +19,40 @@
             android:background="@drawable/bg_handle" />
     </FrameLayout>
 
-    <!-- Hàng trên: QUÉT / GÕ PHÍM / ẨN (chỉ biểu tượng, 3 nút bằng nhau) -->
+    <!-- Hàng trên: dựng bằng code theo bố cục người dùng chọn (Tùy chỉnh nút Scan) -->
     <LinearLayout
+        android:id="@+id/topArea"
         android:layout_width="match_parent"
-        android:layout_height="44dp"
-        android:orientation="horizontal"
-        android:paddingStart="5dp"
-        android:paddingTop="4dp"
-        android:paddingEnd="5dp"
-        android:paddingBottom="4dp">
-            <ImageView
-                android:id="@+id/tabScan"
-                style="@style/KbIconToggle"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="3dp"
-                android:layout_marginEnd="3dp"
-                android:layout_weight="1"
-                android:contentDescription="tabScan"
-                android:src="@drawable/ic_scan" />
-            <ImageView
-                android:id="@+id/tabType"
-                style="@style/KbIconToggle"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="3dp"
-                android:layout_marginEnd="3dp"
-                android:layout_weight="1"
-                android:contentDescription="tabType"
-                android:src="@drawable/ic_keyboard" />
-            <ImageView
-                android:id="@+id/tabClip"
-                style="@style/KbIconToggle"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="3dp"
-                android:layout_marginEnd="3dp"
-                android:layout_weight="1"
-                android:contentDescription="tabClip"
-                android:src="@drawable/ic_clipboard" />
-            <ImageView
-                android:id="@+id/btnHide"
-                style="@style/KbIcon"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="3dp"
-                android:layout_marginEnd="3dp"
-                android:layout_weight="1"
-                android:contentDescription="btnHide"
-                android:src="@drawable/ic_chevron_down" />
-    </LinearLayout>
+        android:layout_height="wrap_content"
+        android:orientation="vertical" />
+
+    <!-- Nhóm Công cụ: mở ra bên dưới hàng trên khi bấm nút Công cụ, dùng được ở mọi chế độ -->
+    <FrameLayout
+        android:id="@+id/toolsBox"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="start"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="2dp"
+        android:layout_marginEnd="8dp"
+        android:layout_marginBottom="4dp"
+        android:background="@drawable/bg_flyout"
+        android:padding="6dp"
+        android:visibility="gone">
+        <HorizontalScrollView
+            android:id="@+id/toolsScroll"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:overScrollMode="never"
+            android:scrollbars="none">
+            <LinearLayout
+                android:id="@+id/toolsRow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+    </FrameLayout>
 
     <!-- MÀN HÌNH QUÉT -->
     <LinearLayout
@@ -135,64 +119,6 @@
                 android:text="Giữ lâu một biểu tượng để xem hướng dẫn"
                 android:textColor="@color/text"
                 android:textSize="12sp" />
-
-            <!-- Danh sách tính năng (mở ra từ biểu tượng công cụ ở hàng dưới) -->
-            <LinearLayout
-                android:id="@+id/flyout"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="bottom|start"
-                android:layout_margin="8dp"
-                android:background="@drawable/bg_flyout"
-                android:orientation="horizontal"
-                android:padding="6dp"
-                android:visibility="gone">
-                <ImageView
-                    android:id="@+id/fCam"
-                    style="@style/KbIconToggle"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
-                    android:layout_marginStart="3dp"
-                    android:layout_marginEnd="3dp"
-                    android:contentDescription="fCam"
-                    android:src="@drawable/ic_camera" />
-                <ImageView
-                    android:id="@+id/fFlash"
-                    style="@style/KbIconToggle"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
-                    android:layout_marginStart="3dp"
-                    android:layout_marginEnd="3dp"
-                    android:contentDescription="fFlash"
-                    android:src="@drawable/ic_flash" />
-                <ImageView
-                    android:id="@+id/fKeepOn"
-                    style="@style/KbIconToggle"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
-                    android:layout_marginStart="3dp"
-                    android:layout_marginEnd="3dp"
-                    android:contentDescription="fKeepOn"
-                    android:src="@drawable/ic_sun" />
-                <ImageView
-                    android:id="@+id/fDim"
-                    style="@style/KbIconToggle"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
-                    android:layout_marginStart="3dp"
-                    android:layout_marginEnd="3dp"
-                    android:contentDescription="fDim"
-                    android:src="@drawable/ic_moon" />
-                <ImageView
-                    android:id="@+id/fAutoEnter"
-                    style="@style/KbIconToggle"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
-                    android:layout_marginStart="3dp"
-                    android:layout_marginEnd="3dp"
-                    android:contentDescription="fAutoEnter"
-                    android:src="@drawable/ic_enter_auto" />
-            </LinearLayout>
         </FrameLayout>
 
         <Space android:layout_width="match_parent" android:layout_height="6dp" />
@@ -261,13 +187,10 @@
         android:layout_height="wrap_content"
         android:visibility="gone" />
 
-    <!-- Hàng cuối cùng: tên người tạo -->
-    <TextView
+    <!-- Hàng cuối cùng: tên người tạo (kiểu chữ và hiệu ứng chỉnh trong Tùy chọn cho nhà phát triển) -->
+    <com.inventory.scannerkeyboard.CreditView
+        android:id="@+id/creditView"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:gravity="center"
-        android:text="Created by: Toan.nguyenanh@spxexpress.com"
-        android:textColor="#EE4D2D"
-        android:textSize="10sp" />
+        android:layout_marginTop="6dp" />
 </LinearLayout>

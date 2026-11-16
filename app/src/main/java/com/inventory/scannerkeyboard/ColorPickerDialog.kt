@@ -79,9 +79,21 @@ object ColorPickerDialog {
 
         fun bar(sb: SeekBar, name: String, set: (Int) -> Unit) {
             label(name)
-            box.addView(sb, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            fun nudge(delta: Int): Boolean {
+                val n = (sb.progress + delta).coerceIn(0, sb.max)
+                if (n == sb.progress) return false
+                set(n); refresh(false); SeekAssist.tick(activity)
+                return true
+            }
+            val row = LinearLayout(activity).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+            row.addView(SeekAssist.stepButton(activity, "−") { nudge(-1) }, LinearLayout.LayoutParams(dp(38), dp(38)))
+            row.addView(sb, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(SeekAssist.stepButton(activity, "+") { nudge(1) }, LinearLayout.LayoutParams(dp(38), dp(38)))
+            box.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             sb.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) { if (fromUser && !updating) { set(p); refresh(false) } }
+                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
+                    if (fromUser && !updating) { set(p); refresh(false); SeekAssist.tick(activity) }
+                }
                 override fun onStartTrackingTouch(s: SeekBar?) {}
                 override fun onStopTrackingTouch(s: SeekBar?) {}
             })

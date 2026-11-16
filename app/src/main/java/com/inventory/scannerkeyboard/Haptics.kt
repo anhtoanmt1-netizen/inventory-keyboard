@@ -17,6 +17,18 @@ object Haptics {
         return vib
     }
 
+    /** Rung một nhịp dài [ms] mili giây với biên độ mặc định của máy (dùng khi quét mã thành công). */
+    fun pulse(ctx: Context, ms: Long) {
+        val v = vibrator(ctx) ?: return
+        try { v.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE)) } catch (_: Throwable) { }
+    }
+
+    /** Rung nhẹ theo công tắc và cường độ "rung khi chạm / gõ phím" trong cài đặt. */
+    fun tickIfEnabled(ctx: Context) {
+        val p = Prefs(ctx)
+        if (p.keyHaptic) tick(ctx, p.keyHapticStrength)
+    }
+
     fun tick(ctx: Context, strength: Int) {
         val v = vibrator(ctx) ?: return
         if (!v.hasVibrator()) return

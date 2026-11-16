@@ -42,6 +42,8 @@ class ClipPanel(
         fun onPasteAll(items: List<ClipItem>)
         fun onSearch()
         fun onSearchCleared()
+        /** Mở bảng xem nội dung đầy đủ của một mục (nút con mắt). */
+        fun onView(item: ClipItem)
     }
 
     companion object {
@@ -380,6 +382,7 @@ class ClipPanel(
             textSize = 10f; setTextColor(if (isSel) col(R.color.accent) else muted)
             setPadding(dp(9), 0, 0, 0)
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        foot.addView(iconBtn(R.drawable.ic_eye, if (note) NOTE_MUTED else muted) { cb.onView(item) })
         if (note) foot.addView(iconBtn(R.drawable.ic_palette, NOTE_MUTED) {
             if (!paletteOpen.add(item.id)) paletteOpen.remove(item.id); refresh()
         })

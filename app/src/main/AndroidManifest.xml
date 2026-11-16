@@ -33,6 +33,16 @@
             android:name=".ThemeActivity"
             android:exported="false" />
 
+        <!-- Xuất / nhập giao diện và cài đặt bằng file hoặc mã QR -->
+        <activity
+            android:name=".TransferActivity"
+            android:exported="false" />
+
+        <!-- Quét mã QR (nhiều mã) để nhập giao diện / cài đặt -->
+        <activity
+            android:name=".QrScanActivity"
+            android:exported="false" />
+
         <!-- Bàn phím (Input Method Service) -->
         <service
             android:name=".ScannerKeyboardService"

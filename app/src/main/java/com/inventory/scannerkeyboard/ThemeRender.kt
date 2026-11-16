@@ -243,6 +243,28 @@ object ThemeRender {
         return RippleDrawable(ColorStateList.valueOf(0x22FFFFFF), content, mask)
     }
 
+    /** Mặt phím thuần (màu, viền, cạnh 3D, bóng phản chiếu), chưa có hiệu ứng gợn sóng. Dùng cho phím có ảnh riêng. */
+    fun faceOnly(ctx: Context, st: PanelStyle, kind: Kind): Drawable {
+        val d = ctx.resources.displayMetrics.density
+        val base = when (kind) {
+            Kind.NORMAL, Kind.TOGGLE -> st.keyColor
+            Kind.SPECIAL -> st.specialColor
+            Kind.ACCENT -> st.accentColor
+        }
+        return face(d, st, withPct(base, st.keyAlpha))
+    }
+
+    /** Phủ hiệu ứng gợn sóng khi chạm lên một nội dung phím, bo góc theo kiểu hiện tại. */
+    fun withRipple(ctx: Context, st: PanelStyle, content: Drawable): Drawable {
+        val d = ctx.resources.displayMetrics.density
+        val mask = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            setColor(Color.WHITE)
+            cornerRadius = st.cornerDp * d
+        }
+        return RippleDrawable(ColorStateList.valueOf(0x22FFFFFF), content, mask)
+    }
+
     /** Độ nổi: bóng đổ dưới phím. Hình bóng bám theo bo góc và chừa phần cạnh 3D. */
     fun elevate(v: View, st: PanelStyle) {
         val d = v.resources.displayMetrics.density
@@ -345,6 +367,22 @@ object ThemeRender {
         return v
     }
 
+    /** Phím Space trong khung xem trước: đúng kiểu riêng của phím Space (nền, ảnh, chữ). */
+    private fun previewSpace(ctx: Context, st: PanelStyle, sp: SpaceStyle): View {
+        val tv = TextView(ctx).apply {
+            gravity = Gravity.CENTER
+            setSingleLine()
+            textSize = 12f * st.fontScale / 100f
+            styleText(this, st)
+            SpaceRender.styleLabel(this, st, sp, true)
+            background = SpaceRender.background(ctx, st, sp)
+        }
+        elevate(tv, SpaceRender.shapeStyle(st, sp))
+        val m = dp(ctx, st.gapDp)
+        tv.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, sp.weight / 10f).apply { setMargins(m, 0, m, 0) }
+        return tv
+    }
+
     /** Gắn lớp hiệu ứng (ánh sáng chạy liên tục) vào khung xem trước và cho phép chạm thử vào các phím. */
     private fun attachFx(box: ViewGroup, st: PanelStyle, keys: List<View>) {
         val fx = FxDrawable(box) { keys }
@@ -374,7 +412,7 @@ object ThemeRender {
     }
 
     /** Mô phỏng bảng Bàn phím (3 hàng phím chữ + hàng dưới) với đúng kiểu đang chỉnh. */
-    fun previewKeyboard(ctx: Context, st: PanelStyle, rowDp: Int): View {
+    fun previewKeyboard(ctx: Context, st: PanelStyle, rowDp: Int, space: SpaceStyle = SpaceStyle()): View {
         val box = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             clipChildren = false
@@ -402,7 +440,9 @@ object ThemeRender {
         val r4 = row()
         r4.addView(previewKey(ctx, st, "?123", 0, Kind.SPECIAL, 1.5f))
         r4.addView(previewKey(ctx, st, "VN", 0, Kind.SPECIAL, 1.2f))
-        r4.addView(previewKey(ctx, st, "", 0, Kind.NORMAL, 4f))
+        r4.addView(previewKey(ctx, st, ",", 0, Kind.NORMAL, 1f))
+        r4.addView(previewSpace(ctx, st, space))
+        r4.addView(previewKey(ctx, st, ".", 0, Kind.NORMAL, 1f))
         r4.addView(previewKey(ctx, st, null, R.drawable.ic_enter, Kind.ACCENT, 1.5f))
         attachFx(box, st, collectKeys(box))
         return box
@@ -432,14 +472,14 @@ object ThemeRender {
             clipChildren = false
             clipToPadding = false
         }
-        for (key in ScanLayout.KEYS) {
+        for (key in ScanLayout.DEFAULT_BOTTOM) {
             val iv = ImageView(ctx).apply {
                 setImageResource(ScanLayout.ICONS[key] ?: R.drawable.ic_tune)
                 scaleType = ImageView.ScaleType.FIT_CENTER
                 setPadding(dp(ctx, 11), dp(ctx, 11), dp(ctx, 11), dp(ctx, 11))
             }
-            styleButton(ctx, iv, st, if (key == "tools") Kind.TOGGLE else Kind.NORMAL, false)
-            row.addView(iv, LinearLayout.LayoutParams(dp(ctx, 44), dp(ctx, 44)).apply { setMargins(dp(ctx, 4), 0, dp(ctx, 4), 0) })
+            styleButton(ctx, iv, st, if (ScanLayout.isToggle(key)) Kind.TOGGLE else Kind.NORMAL, false)
+            row.addView(iv, LinearLayout.LayoutParams(dp(ctx, 44), dp(ctx, 44)).apply { setMargins(dp(ctx, 3), 0, dp(ctx, 3), 0) })
         }
         box.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(ctx, 6) })
         val btns = ArrayList<View>()

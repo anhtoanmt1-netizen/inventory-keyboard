@@ -16,6 +16,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
+import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -29,8 +30,9 @@ import java.io.FileOutputStream
 import kotlin.math.roundToInt
 
 /**
- * Màn hình "Tùy chỉnh nút Scan": sắp xếp (kéo thả), số nút mỗi hàng, kích thước, thu phóng, khoảng cách,
- * căn lề, ảnh PNG riêng cho từng nút, xem trước trực tiếp, áp dụng / khôi phục mặc định.
+ * Màn hình "Tùy chỉnh nút Scan": ba khu vực nút (hàng trên, hàng dưới, nhóm Công cụ), di chuyển nút giữa các
+ * khu vực, sắp xếp (kéo thả), tối đa 10 nút mỗi hàng, kích thước, thu phóng, khoảng cách, căn lề,
+ * ảnh PNG riêng cho từng nút, xem trước trực tiếp, áp dụng / khôi phục mặc định.
  * Mọi thay đổi chỉ có hiệu lực trên bàn phím sau khi bấm ÁP DỤNG.
  */
 class ButtonLayoutActivity : Activity() {
@@ -42,14 +44,14 @@ class ButtonLayoutActivity : Activity() {
     private var pickKey: String? = null
 
     private lateinit var previewHost: LinearLayout
-    private lateinit var listBox: LinearLayout
+    private val areaBoxes = arrayOfNulls<LinearLayout>(3)
     private lateinit var editorBox: LinearLayout
     private lateinit var tvDirty: TextView
     private val d by lazy { resources.displayMetrics.density }
     private fun dp(v: Int) = (v * d).toInt()
     private fun col(id: Int) = ContextCompat.getColor(this, id)
 
-    private val rowViews = ArrayList<View>()
+    private val areaRows = Array(3) { ArrayList<View>() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -70,7 +72,7 @@ class ButtonLayoutActivity : Activity() {
             text = "Tùy chỉnh nút Scan"; textSize = 20f; setTextColor(col(R.color.text)); setTypeface(null, android.graphics.Typeface.BOLD)
         })
         root.addView(TextView(this).apply {
-            text = "Sắp xếp, đổi kích thước và thay hình các nút ở hàng chức năng dưới bảng Scan. Xem trước ngay bên dưới, bấm ÁP DỤNG để dùng trên bàn phím."
+            text = "Sắp xếp, đổi kích thước, thay hình và chuyển các nút giữa hàng trên, hàng dưới (bảng Scan) và nhóm Công cụ. Xem trước ngay bên dưới, bấm ÁP DỤNG để dùng trên bàn phím."
             textSize = 12f; setTextColor(col(R.color.muted)); setPadding(0, dp(4), 0, dp(8))
         })
         tvDirty = TextView(this).apply {
@@ -89,8 +91,8 @@ class ButtonLayoutActivity : Activity() {
 
         // --- Bố cục chung ---
         val g = card(root, "BỐ CỤC CHUNG")
-        label(g, "Số nút trên mỗi hàng")
-        chips(g, listOf("1", "2", "3", "4", "5"), { cfg.perRow - 1 }) { cfg = cfg.copy(perRow = it + 1); changed() }
+        seekRow(g, "Số nút mỗi hàng: hàng trên", 1, ScanLayout.MAX_PER_ROW, { cfg.perRowTop }, "") { cfg = cfg.copy(perRowTop = it); changed() }
+        seekRow(g, "Số nút mỗi hàng: hàng dưới", 1, ScanLayout.MAX_PER_ROW, { cfg.perRowBottom }, "") { cfg = cfg.copy(perRowBottom = it); changed() }
         seekRow(g, "Chiều rộng nút", 32, 96, { cfg.widthDp }, "dp") { cfg = cfg.copy(widthDp = it); changed() }
         seekRow(g, "Chiều cao nút", 32, 96, { cfg.heightDp }, "dp") { cfg = cfg.copy(heightDp = it); changed() }
         seekRow(g, "Thu phóng chung", 60, 160, { cfg.scale }, "%") { cfg = cfg.copy(scale = it); changed() }
@@ -107,14 +109,26 @@ class ButtonLayoutActivity : Activity() {
         gridRow.addView(sw)
         g.addView(gridRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(12) })
 
-        // --- Danh sách nút ---
+        // --- Danh sách nút: ba khu vực ---
         val l = card(root, "DANH SÁCH NÚT")
         l.addView(TextView(this).apply {
-            text = "Giữ và kéo biểu tượng ≡ (hoặc dùng ▲ ▼) để đổi thứ tự. Chạm một nút để chỉnh hình ảnh và thu phóng riêng."
+            text = "Giữ và kéo biểu tượng ≡ (hoặc dùng ▲ ▼) để đổi thứ tự trong khu vực. Bấm ⇄ để chuyển nút sang hàng trên, hàng dưới hoặc nhóm Công cụ. Chạm một nút để chỉnh hình ảnh và thu phóng riêng."
             textSize = 12f; setTextColor(col(R.color.muted)); setPadding(0, dp(4), 0, dp(4))
         })
-        listBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        l.addView(listBox)
+        val titles = listOf("HÀNG TRÊN (hiện ở mọi chế độ)", "HÀNG DƯỚI (bảng Scan, dưới khung camera)", "NHÓM CÔNG CỤ (mở khi bấm nút Công cụ)")
+        for (a in 0..2) {
+            l.addView(TextView(this).apply {
+                text = titles[a]; textSize = 12f; setTextColor(col(R.color.accent)); setTypeface(null, android.graphics.Typeface.BOLD)
+                letterSpacing = 0.05f
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(14) })
+            val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            areaBoxes[a] = box
+            l.addView(box)
+            if (a == ScanLayout.AREA_TOOLS) {
+                l.addView(button("+ THÊM NÚT VÀO CÔNG CỤ", false) { showAddToTools() },
+                    LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)).apply { topMargin = dp(8) })
+            }
+        }
         editorBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         l.addView(editorBox)
 
@@ -165,21 +179,14 @@ class ButtonLayoutActivity : Activity() {
         parent.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
     }
 
-    /** Thanh trượt có nhãn hiển thị giá trị. */
+    /** Thanh trượt có nhãn giá trị, nút − / + ở hai đầu và rung nhẹ mỗi khi giá trị thay đổi. */
     private fun seekRow(parent: LinearLayout, title: String, min: Int, max: Int, current: () -> Int, unit: String, onChange: (Int) -> Unit) {
         val tv = TextView(this).apply { textSize = 14f; setTextColor(col(R.color.text)); setTypeface(null, android.graphics.Typeface.BOLD) }
         fun show(v: Int) { tv.text = "$title: $v$unit" }
         show(current())
         parent.addView(tv, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(14) })
-        val sb = SeekBar(this).apply {
-            this.max = max - min; progress = current() - min
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) { if (fromUser) { show(p + min); onChange(p + min) } }
-                override fun onStartTrackingTouch(s: SeekBar?) {}
-                override fun onStopTrackingTouch(s: SeekBar?) {}
-            })
-        }
-        parent.addView(sb, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(4) })
+        val sr = SeekRow(this, min, max, current()) { v -> show(v); onChange(v) }
+        parent.addView(sr.view, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(4) })
     }
 
     // ------------------------------------------------------------------ cập nhật
@@ -194,83 +201,152 @@ class ButtonLayoutActivity : Activity() {
         changed()
     }
 
-    private fun refreshPreview() {
-        previewHost.removeAllViews()
-        previewHost.addView(ScanButtons.buildRows(this, cfg, ScanButtons.makeAll(this, cfg)))
+    private fun caption(text: String) = TextView(this).apply {
+        this.text = text; textSize = 10f; setTextColor(col(R.color.muted)); letterSpacing = 0.05f
+        setPadding(dp(16), dp(6), 0, dp(2))
     }
 
-    // ------------------------------------------------------------------ danh sách nút + kéo thả
-    private fun refreshList() {
-        listBox.removeAllViews()
-        rowViews.clear()
-        val n = cfg.order.size
-        cfg.order.forEachIndexed { idx, key ->
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-                background = GradientDrawable().apply {
-                    cornerRadius = dp(10).toFloat()
-                    setColor(col(R.color.surface2))
-                    if (key == selected) setStroke(dp(2), col(R.color.accent))
-                }
-                isClickable = true
-                setOnClickListener { selected = key; refreshList(); refreshEditor() }
-            }
-            val handle = TextView(this).apply {
-                text = "≡"; textSize = 24f; gravity = Gravity.CENTER; setTextColor(col(R.color.muted))
-            }
-            row.addView(handle, LinearLayout.LayoutParams(dp(48), dp(52)))
-            row.addView(ImageView(this).apply {
-                setImageResource(ScanLayout.ICONS[key] ?: R.drawable.ic_tune)
-                imageTintList = ContextCompat.getColorStateList(this@ButtonLayoutActivity, R.color.icon_tint)
-            }, LinearLayout.LayoutParams(dp(26), dp(26)))
-            row.addView(TextView(this).apply {
-                text = ScanLayout.LABELS[key] + if (cfg.cfg(key).image != null) "  (ảnh riêng)" else ""
-                textSize = 14f; setTextColor(col(R.color.text)); setPadding(dp(10), 0, 0, 0)
-            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            row.addView(arrow("▲", idx > 0) { move(idx, idx - 1) }, LinearLayout.LayoutParams(dp(40), dp(40)))
-            row.addView(arrow("▼", idx < n - 1) { move(idx, idx + 1) }, LinearLayout.LayoutParams(dp(40), dp(40)))
-            listBox.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)).apply { topMargin = dp(6) })
-            rowViews.add(row)
-            attachDrag(handle, idx)
+    private fun refreshPreview() {
+        previewHost.removeAllViews()
+        val m = ScanButtons.makeAll(this, cfg)
+        previewHost.addView(caption("HÀNG TRÊN"))
+        previewHost.addView(ScanButtons.buildRows(this, cfg, m, cfg.top, cfg.perRowTop))
+        previewHost.addView(caption("NHÓM CÔNG CỤ (mở ra bên dưới hàng trên)"))
+        val strip = ScanButtons.buildStrip(this, m, cfg.tools)
+        val box = HorizontalScrollView(this).apply {
+            setBackgroundResource(R.drawable.bg_flyout); setPadding(dp(6), dp(6), dp(6), dp(6))
+            isHorizontalScrollBarEnabled = false
+            addView(strip)
         }
-        Fonts.apply(listBox)
+        if (cfg.tools.isEmpty()) strip.addView(TextView(this).apply {
+            text = "(trống)"; textSize = 12f; setTextColor(col(R.color.muted)); setPadding(dp(8), dp(8), dp(8), dp(8))
+        })
+        previewHost.addView(box, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            marginStart = dp(8)
+        })
+        previewHost.addView(caption("HÀNG DƯỚI (BẢNG SCAN)"))
+        previewHost.addView(ScanButtons.buildRows(this, cfg, m, cfg.bottom, cfg.perRowBottom))
+    }
+
+    // ------------------------------------------------------------------ danh sách nút + kéo thả + chuyển khu vực
+    private fun refreshList() {
+        for (a in 0..2) {
+            val box = areaBoxes[a] ?: continue
+            box.removeAllViews()
+            areaRows[a].clear()
+            val list = cfg.listFor(a)
+            if (list.isEmpty()) box.addView(TextView(this).apply {
+                text = "(chưa có nút nào)"; textSize = 12f; setTextColor(col(R.color.muted)); setPadding(dp(4), dp(8), 0, dp(4))
+            })
+            list.forEachIndexed { idx, key -> box.addView(buildRow(a, idx, key, list.size), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)).apply { topMargin = dp(6) }) }
+            Fonts.apply(box)
+        }
+    }
+
+    private fun buildRow(area: Int, idx: Int, key: String, n: Int): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            background = GradientDrawable().apply {
+                cornerRadius = dp(10).toFloat()
+                setColor(col(R.color.surface2))
+                if (key == selected) setStroke(dp(2), col(R.color.accent))
+            }
+            isClickable = true
+            setOnClickListener { selected = key; refreshList(); refreshEditor() }
+        }
+        val handle = TextView(this).apply {
+            text = "≡"; textSize = 24f; gravity = Gravity.CENTER; setTextColor(col(R.color.muted))
+        }
+        row.addView(handle, LinearLayout.LayoutParams(dp(44), dp(52)))
+        row.addView(ImageView(this).apply {
+            setImageResource(ScanLayout.ICONS[key] ?: R.drawable.ic_tune)
+            imageTintList = ContextCompat.getColorStateList(this@ButtonLayoutActivity, R.color.icon_tint)
+        }, LinearLayout.LayoutParams(dp(26), dp(26)))
+        row.addView(TextView(this).apply {
+            text = (ScanLayout.LABELS[key] ?: key) + if (cfg.cfg(key).image != null) "  (ảnh riêng)" else ""
+            textSize = 14f; setTextColor(col(R.color.text)); setPadding(dp(10), 0, 0, 0)
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(arrow("▲", idx > 0) { move(area, idx, idx - 1) }, LinearLayout.LayoutParams(dp(34), dp(40)))
+        row.addView(arrow("▼", idx < n - 1) { move(area, idx, idx + 1) }, LinearLayout.LayoutParams(dp(34), dp(40)))
+        row.addView(arrow("⇄", true) { showMoveMenu(key) }, LinearLayout.LayoutParams(dp(40), dp(40)))
+        areaRows[area].add(row)
+        attachDrag(handle, area, idx)
+        return row
     }
 
     private fun arrow(t: String, enabled: Boolean, click: () -> Unit) = TextView(this).apply {
-        text = t; textSize = 14f; gravity = Gravity.CENTER; setTextColor(col(R.color.text)); alpha = if (enabled) 1f else 0.25f
+        text = t; textSize = 15f; gravity = Gravity.CENTER; setTextColor(col(R.color.text)); alpha = if (enabled) 1f else 0.25f
         isClickable = enabled; setOnClickListener { if (enabled) click() }
     }
 
-    private fun move(from: Int, to: Int) {
-        val o = cfg.order.toMutableList()
+    private fun move(area: Int, from: Int, to: Int) {
+        val o = cfg.listFor(area).toMutableList()
         val k = o.removeAt(from)
         o.add(to.coerceIn(0, o.size), k)
-        cfg = cfg.copy(order = o)
+        cfg = cfg.withList(area, o)
         refreshList(); changed()
     }
 
-    /** Kéo thả: hàng đang kéo đi theo ngón tay, các hàng khác nhường chỗ; thả tay thì chốt vị trí mới. */
-    private fun attachDrag(handle: View, origIdx: Int) {
+    private val areaNames = listOf("Hàng trên", "Hàng dưới (bảng Scan)", "Nhóm Công cụ")
+
+    /** Chuyển một nút sang khu vực khác. Nút Công cụ không thể nằm trong chính nhóm Công cụ. */
+    private fun showMoveMenu(key: String) {
+        val cur = cfg.areaOf(key)
+        val targets = (0..2).filter { it != cur && !(it == ScanLayout.AREA_TOOLS && key == "tools") }
+        if (targets.isEmpty()) return
+        AlertDialog.Builder(this)
+            .setTitle("Chuyển \"${ScanLayout.LABELS[key]}\" tới")
+            .setItems(targets.map { areaNames[it] }.toTypedArray()) { _, which ->
+                cfg = cfg.moved(key, targets[which])
+                selected = key
+                refreshAll()
+            }
+            .setNegativeButton("Hủy", null)
+            .show()
+    }
+
+    /** Chọn một nút đang ở hàng trên / dưới để thêm vào nhóm Công cụ. */
+    private fun showAddToTools() {
+        val cand = ScanLayout.KEYS.filter { it != "tools" && cfg.areaOf(it) != ScanLayout.AREA_TOOLS }
+        if (cand.isEmpty()) {
+            Toast.makeText(this, "Tất cả nút đã nằm trong nhóm Công cụ.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Thêm vào nhóm Công cụ")
+            .setItems(cand.map { (ScanLayout.LABELS[it] ?: it) + "  (đang ở " + areaNames[cfg.areaOf(it)].lowercase() + ")" }.toTypedArray()) { _, which ->
+                cfg = cfg.moved(cand[which], ScanLayout.AREA_TOOLS)
+                selected = cand[which]
+                refreshAll()
+            }
+            .setNegativeButton("Hủy", null)
+            .show()
+    }
+
+    /** Kéo thả trong một khu vực: hàng đang kéo đi theo ngón tay, các hàng khác nhường chỗ; thả tay thì chốt vị trí mới. */
+    private fun attachDrag(handle: View, area: Int, origIdx: Int) {
         var startY = 0f
         var desired = origIdx
         handle.setOnTouchListener { v, e ->
-            val n = rowViews.size
-            val rowH = (rowViews[origIdx].height + dp(6)).toFloat()
+            val rows = areaRows[area]
+            val n = rows.size
+            if (origIdx >= n) return@setOnTouchListener true
+            val rowH = (rows[origIdx].height + dp(6)).toFloat()
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     startY = e.rawY; desired = origIdx
                     v.parent?.requestDisallowInterceptTouchEvent(true)
-                    rowViews[origIdx].elevation = dp(8).toFloat()
-                    rowViews[origIdx].alpha = 0.85f
+                    rows[origIdx].elevation = dp(8).toFloat()
+                    rows[origIdx].alpha = 0.85f
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val dy = e.rawY - startY
-                    rowViews[origIdx].translationY = dy.coerceIn(-origIdx * rowH, (n - 1 - origIdx) * rowH)
+                    rows[origIdx].translationY = dy.coerceIn(-origIdx * rowH, (n - 1 - origIdx) * rowH)
                     desired = (origIdx + (dy / rowH).roundToInt()).coerceIn(0, n - 1)
                     for (i in 0 until n) {
                         if (i == origIdx) continue
-                        rowViews[i].translationY = when {
+                        rows[i].translationY = when {
                             origIdx < desired && i in (origIdx + 1)..desired -> -rowH
                             origIdx > desired && i in desired until origIdx -> rowH
                             else -> 0f
@@ -279,8 +355,8 @@ class ButtonLayoutActivity : Activity() {
                     true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    for (r in rowViews) { r.translationY = 0f; r.alpha = 1f; r.elevation = 0f }
-                    if (e.actionMasked == MotionEvent.ACTION_UP && desired != origIdx) move(origIdx, desired)
+                    for (r in rows) { r.translationY = 0f; r.alpha = 1f; r.elevation = 0f }
+                    if (e.actionMasked == MotionEvent.ACTION_UP && desired != origIdx) move(area, origIdx, desired)
                     true
                 }
                 else -> true
@@ -299,7 +375,7 @@ class ButtonLayoutActivity : Activity() {
         }
         editorBox.addView(box, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })
         box.addView(TextView(this).apply {
-            text = "Chỉnh nút: ${ScanLayout.LABELS[key]}"; textSize = 14f; setTextColor(col(R.color.accent)); setTypeface(null, android.graphics.Typeface.BOLD)
+            text = "Chỉnh nút: ${ScanLayout.LABELS[key] ?: key}"; textSize = 14f; setTextColor(col(R.color.accent)); setTypeface(null, android.graphics.Typeface.BOLD)
         })
 
         val btns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }

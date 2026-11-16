@@ -11,8 +11,8 @@ android {
         applicationId = "com.inventory.scannerkeyboard"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "2.0"
     }
     buildTypes {
         release { isMinifyEnabled = false }
@@ -35,4 +35,6 @@ dependencies {
     implementation("androidx.camera:camera-view:$camerax")
     // ML Kit: model đóng gói sẵn trong app, chạy offline, không cần Google Play Services
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
+    // Tạo mã QR để xuất giao diện / cài đặt (chỉ phần mã hóa, không kéo thêm thư viện nặng)
+    implementation("com.google.zxing:core:3.5.3")
 }

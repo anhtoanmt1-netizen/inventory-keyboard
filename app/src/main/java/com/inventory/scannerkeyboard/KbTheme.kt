@@ -177,7 +177,8 @@ data class KbTheme(
     val id: String,
     val name: String,
     val scan: PanelStyle = PanelStyle(),
-    val kb: PanelStyle = PanelStyle()
+    val kb: PanelStyle = PanelStyle(),
+    val space: SpaceStyle = SpaceStyle()   // giao diện + chức năng riêng của phím Space
 )
 
 /** Toàn bộ danh sách giao diện và giao diện đang dùng. */
@@ -216,7 +217,8 @@ object ThemeStore {
                 list.add(
                     KbTheme(
                         id, t.optString("name", "Giao diện"),
-                        PanelStyle.fromJson(t.optJSONObject("scan")), PanelStyle.fromJson(t.optJSONObject("kb"))
+                        PanelStyle.fromJson(t.optJSONObject("scan")), PanelStyle.fromJson(t.optJSONObject("kb")),
+                        SpaceStyle.fromJson(t.optJSONObject("space"))
                     )
                 )
             }
@@ -228,6 +230,7 @@ object ThemeStore {
         val arr = JSONArray()
         for (t in st.themes) arr.put(
             JSONObject().put("id", t.id).put("name", t.name).put("scan", t.scan.toJson()).put("kb", t.kb.toJson())
+                .put("space", t.space.toJson())
         )
         return JSONObject().put("active", st.active).put("themes", arr).toString()
     }
@@ -241,7 +244,11 @@ object ThemeStore {
     fun cleanupImages(ctx: Context, st: ThemeState) {
         try {
             val used = HashSet<String>()
-            for (t in st.themes) { t.scan.bgImage?.let { used.add(it) }; t.kb.bgImage?.let { used.add(it) } }
+            for (t in st.themes) {
+                t.scan.bgImage?.let { used.add(it) }
+                t.kb.bgImage?.let { used.add(it) }
+                t.space.image?.let { used.add(it) }
+            }
             imageDir(ctx).listFiles()?.forEach { if (it.name !in used) it.delete() }
         } catch (_: Throwable) { }
     }

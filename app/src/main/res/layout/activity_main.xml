@@ -20,6 +20,7 @@
             android:paddingTop="8dp">
 
             <ImageView
+                android:id="@+id/imgLogo"
                 android:layout_width="wrap_content"
                 android:layout_height="38dp"
                 android:adjustViewBounds="true"
@@ -214,7 +215,7 @@
                 android:layout_height="wrap_content"
                 android:text="GIAO DIỆN NÚT SCAN" />
 
-            <TextView style="@style/SettingDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Sắp xếp nút bằng kéo thả, đổi số nút mỗi hàng, kích thước, căn lề, thay hình PNG riêng cho từng nút, có xem trước trực tiếp." />
+            <TextView style="@style/SettingDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Sắp xếp nút bằng kéo thả, chuyển nút giữa hàng trên / hàng dưới / nhóm Công cụ, tối đa 10 nút mỗi hàng, đổi kích thước, căn lề, thay hình PNG riêng cho từng nút, có xem trước trực tiếp." />
             <TextView android:id="@+id/btnButtonLayout" style="@style/BtnPrimary" android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="10dp" android:text="TÙY CHỈNH NÚT SCAN" />
         </LinearLayout>
 
@@ -348,6 +349,32 @@
                 style="@style/SectionTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:text="XUẤT / NHẬP" />
+
+            <TextView style="@style/SettingDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Chia sẻ giao diện và cài đặt sang thiết bị khác bằng File hoặc mã QR. Giao diện và Cài đặt được xuất / nhập riêng." />
+            <TextView android:id="@+id/btnTransfer" style="@style/BtnPrimary" android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="10dp" android:text="XUẤT / NHẬP GIAO DIỆN VÀ CÀI ĐẶT" />
+        </LinearLayout>
+
+        <!-- Tùy chọn cho nhà phát triển: ẩn, nhấn 5 lần liên tiếp vào logo SPX để mở / ẩn -->
+        <LinearLayout
+            android:id="@+id/devHost"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_card"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                style="@style/SectionTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:text="HƯỚNG DẪN NHANH" />
 
             <TextView
@@ -355,9 +382,11 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
                 android:lineSpacingExtra="4dp"
-                android:text="• Hàng trên: biểu tượng khung quét = QUÉT, biểu tượng bàn phím = GÕ PHÍM, mũi tên xuống = ẨN bàn phím.
-• Hàng dưới: công cụ (camera, flash, luôn sáng, giảm sáng, tự Enter), XÓA, ENTER, CÀI ĐẶT (bánh răng), ĐỔI BÀN PHÍM.
+                android:text="• Hàng trên (mọi chế độ): CÔNG CỤ, QUÉT, GÕ PHÍM, CLIPBOARD, CÀI ĐẶT, ĐỔI BÀN PHÍM (dùng chung cho mọi bảng), mũi tên xuống = ẨN bàn phím.
+• Hàng dưới (bảng QUÉT): camera, flash, luôn sáng, giảm sáng, XÓA (giữ để xóa nhanh dần), ENTER.
+• Nút CÔNG CỤ mở nhóm: tự Enter, bật / tắt âm thanh phím, chọn nhanh âm thanh. Có thể chuyển nút giữa các nhóm trong Tùy chỉnh nút Scan.
 • Giữ lâu một biểu tượng để xem hướng dẫn chức năng.
+• Phím cách: chạm để gõ dấu cách, vuốt ngang để di chuyển con trỏ. Con mắt trên thẻ Clipboard = xem đầy đủ nội dung (cuộn chữ, zoom ảnh).
 • Kéo thanh nhỏ trên cùng của bàn phím để chỉnh chiều cao: khung camera (chế độ QUÉT) hoặc hàng phím (chế độ GÕ PHÍM).
 • Biểu tượng bảng nhớ tạm = CLIPBOARD: tự lưu văn bản và hình ảnh vừa sao chép. Chạm một thẻ để dán; ghim để giữ lại (thẻ ghim có màu pastel, bấm biểu tượng bảng màu để đổi màu); giữ lâu một thẻ hoặc bấm biểu tượng dấu tích kép để chọn nhiều rồi Ghim / Xóa / Gửi tất cả (gửi đúng thứ tự bạn đã chọn, cả văn bản lẫn hình ảnh); biểu tượng kính lúp để tìm kiếm.
 • Chế độ GÕ PHÍM có nút VN / EN: VN gõ tiếng Việt kiểu Telex (aa=â, aw=ă, ee=ê, oo=ô, ow=ơ, uw=ư, dd=đ; s f r x j = sắc huyền hỏi ngã nặng; z = xóa dấu), EN gõ tiếng Anh. Mặc định là VN."

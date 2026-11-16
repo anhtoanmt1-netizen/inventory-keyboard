@@ -22,6 +22,7 @@ import android.util.Size
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.ViewConfiguration
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -50,6 +51,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import java.util.concurrent.ExecutorService
+import kotlin.math.abs
 import java.util.concurrent.Executors
 
 /**
@@ -71,16 +73,23 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     private lateinit var cameraBox: View
     private lateinit var tvStatus: TextView
     private lateinit var tvHint: TextView
-    private lateinit var tabScan: ImageView
-    private lateinit var tabType: ImageView
-    private lateinit var tabClip: ImageView
     private lateinit var panelClipHost: FrameLayout
     private lateinit var searchBar: View
     private lateinit var tvSearch: TextView
     private lateinit var panelScan: View
     private lateinit var panelType: LinearLayout
-    private lateinit var btnTools: ImageView
-    private lateinit var btnArea: LinearLayout
+    private lateinit var btnArea: LinearLayout       // hàng nút dưới (bảng Scan)
+    private lateinit var topArea: LinearLayout       // hàng nút trên (hiện ở mọi chế độ)
+    private lateinit var toolsBox: FrameLayout       // nhóm Công cụ (mở ra bên dưới hàng trên)
+    private lateinit var toolsRow: LinearLayout
+    private lateinit var creditView: CreditView
+    private var creditRaw = "\u0000"
+    private var btnMap: Map<String, ImageView> = emptyMap()
+    private var customKeys: Set<String> = emptySet()   // nút đang dùng ảnh PNG riêng (không đổi biểu tượng theo trạng thái)
+    private var toolsMode = 0                          // 0 danh sách công cụ, 1 chọn nhanh âm thanh
+    private var clipViewer: ClipViewer? = null
+    private var spaceStyle = SpaceStyle()
+    private var spaceView: TextView? = null
     private var layoutSig = ""
 
     // ---- Giao diện tùy chỉnh (xem KbTheme.kt / ThemeRender.kt) ----
@@ -93,14 +102,11 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     private var scanTextCaptured = false
     private var fxKb: FxDrawable? = null        // hiệu ứng chạm + ánh sáng trên bảng gõ
     private var fxScan: FxDrawable? = null      // hiệu ứng chạm + ánh sáng trên hàng nút Scan
-    private var scanButtonViews: List<View> = emptyList()
-    private var toolsCustom = false
-    private lateinit var flyout: LinearLayout
-    private lateinit var fCam: ImageView
-    private lateinit var fFlash: ImageView
-    private lateinit var fKeepOn: ImageView
-    private lateinit var fDim: ImageView
-    private lateinit var fAutoEnter: ImageView
+    private var fxTop: FxDrawable? = null       // hiệu ứng chạm + ánh sáng trên hàng nút trên
+    private var fxTools: FxDrawable? = null     // hiệu ứng chạm + ánh sáng trên nhóm Công cụ
+    private var scanButtonViews: List<View> = emptyList()   // nút ở hàng dưới
+    private var topViews: List<View> = emptyList()          // nút ở hàng trên
+    private var toolViews: List<View> = emptyList()         // nút trong nhóm Công cụ
 
     private val handler = Handler(Looper.getMainLooper())
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
@@ -145,8 +151,19 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     }
 
     private var repeatAction: (() -> Unit)? = null
+    private var repeatStart = 0L
+    private var repeatCount = 0
     private val repeatRunnable = object : Runnable {
-        override fun run() { repeatAction?.invoke(); handler.postDelayed(this, 55) }
+        override fun run() {
+            repeatAction?.invoke()
+            repeatCount++
+            // Tốc độ tăng dần theo thời gian giữ: khoảng 120 ms mỗi lần lúc đầu, nhanh dần tới khoảng 28 ms sau ~2 giây.
+            val t = ((SystemClock.uptimeMillis() - repeatStart) / 2200f).coerceIn(0f, 1f)
+            val interval = (120f - 92f * t).toLong()
+            // Rung nhẹ cho từng ký tự bị xóa; khi xóa rất nhanh thì cách một nhịp mới rung để không bị ù.
+            if (interval >= 55L || repeatCount % 2 == 0) keyHaptic()
+            handler.postDelayed(this, interval)
+        }
     }
     private val hideHint = Runnable {
         if (::tvHint.isInitialized) tvHint.animate().alpha(0f).setDuration(180).withEndAction { tvHint.visibility = View.GONE }.start()
@@ -297,6 +314,45 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         }
     }
 
+    /** Mở bảng xem nội dung đầy đủ của một mục Clipboard (nút con mắt). */
+    private fun showClipViewer(item: ClipItem) {
+        val viewer = clipViewer ?: ClipViewer(this, clipStore, object : ClipViewer.Host {
+            override fun paste(item: ClipItem) { pasteClip(item); clipStore.touch(item.id); clipPanel?.refresh() }
+            override fun copy(item: ClipItem) = copyClipToSystem(item)
+            override fun changed() { clipPanel?.refresh(true) }
+        }).also { clipViewer = it }
+        viewer.show(item)
+    }
+
+    /** Sao chép một mục Clipboard lên khay nhớ tạm của máy (không tự lưu lại thành mục mới). */
+    private fun copyClipToSystem(item: ClipItem) {
+        try {
+            ignoreClipUntil = SystemClock.elapsedRealtime() + 1500
+            val cm = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+            if (item.type == ClipStore.TYPE_TEXT) {
+                cm.setPrimaryClip(ClipData.newPlainText("clip", item.text))
+            } else {
+                val file = clipStore.imageFile(item)
+                if (file == null || !file.exists()) { Toast.makeText(this, "Không tìm thấy file ảnh.", Toast.LENGTH_SHORT).show(); return }
+                val uri = FileProvider.getUriForFile(this, "$packageName.clipfiles", file)
+                cm.setPrimaryClip(ClipData.newUri(contentResolver, "clip", uri))
+            }
+            Toast.makeText(this, "Đã sao chép.", Toast.LENGTH_SHORT).show()
+        } catch (_: Throwable) {
+            Toast.makeText(this, "Không sao chép được.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /** Nạp kiểu chữ và hiệu ứng dòng "Created by" nếu đã thay đổi trong Tùy chọn cho nhà phát triển. */
+    private fun refreshCredit() {
+        if (!::creditView.isInitialized) return
+        val raw = prefs.creditJson
+        if (raw != creditRaw) {
+            creditRaw = raw
+            creditView.setStyle(CreditStyle.fromJson(raw))
+        }
+    }
+
     /** Gõ trực tiếp ảnh vào ô đang nhập (nếu ô đó nhận ảnh). Trả về true nếu gửi được. */
     private fun commitImageDirect(file: java.io.File): Boolean {
         val ic = currentInputConnection ?: return false
@@ -419,52 +475,21 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         cameraBox = v.findViewById(R.id.cameraBox)
         tvStatus = v.findViewById(R.id.tvStatus)
         tvHint = v.findViewById(R.id.tvHint)
-        tabScan = v.findViewById(R.id.tabScan)
-        tabType = v.findViewById(R.id.tabType)
-        tabClip = v.findViewById(R.id.tabClip)
         panelClipHost = v.findViewById(R.id.panelClip)
         searchBar = v.findViewById(R.id.searchBar)
         tvSearch = v.findViewById(R.id.tvSearch)
         panelScan = v.findViewById(R.id.panelScan)
         panelType = v.findViewById(R.id.panelType)
         btnArea = v.findViewById(R.id.btnArea)
-        flyout = v.findViewById(R.id.flyout)
-        fCam = v.findViewById(R.id.fCam)
-        fFlash = v.findViewById(R.id.fFlash)
-        fKeepOn = v.findViewById(R.id.fKeepOn)
-        fDim = v.findViewById(R.id.fDim)
-        fAutoEnter = v.findViewById(R.id.fAutoEnter)
+        topArea = v.findViewById(R.id.topArea)
+        toolsBox = v.findViewById(R.id.toolsBox)
+        toolsRow = v.findViewById(R.id.toolsRow)
+        creditView = v.findViewById(R.id.creditView)
 
         cameraBox.layoutParams.height = dp(prefs.cameraHeightDp.coerceIn(120, 420))
 
-        // --- Hàng trên ---
-        bind(tabScan, "QUÉT: dùng camera quét mã QR / mã vạch, mã tự nhập vào ô đang chọn.") { setMode(0) }
-        bind(tabType, "GÕ PHÍM: bàn phím đầy đủ để gõ chữ, số, ký hiệu. Camera tự tắt để tiết kiệm pin.") { setMode(1) }
-        bind(tabClip, "CLIPBOARD: xem lại văn bản và hình ảnh đã sao chép, chạm để dán, ghim mục quan trọng.") { setMode(2) }
-        bind(v.findViewById(R.id.btnHide), "ẨN BÀN PHÍM: thu gọn bàn phím lại.") { requestHideSelf(0) }
-
-        // --- Hàng dưới ---
+        // --- Hàng trên, hàng dưới và nhóm Công cụ: dựng theo bố cục người dùng chọn ---
         rebuildScanButtons()
-
-        // --- Danh sách công cụ (tự thu lại sau khi chọn) ---
-        bind(fCam, "CAMERA: bật / tắt camera quét. Nên tắt khi không dùng để tiết kiệm pin.") {
-            if (scanning) stopCamera() else startCamera(); closeFlyoutSoon()
-        }
-        bind(fFlash, "FLASH: bật / tắt đèn pin khi quét nơi thiếu sáng. Chỉ dùng được khi camera đang bật.") {
-            toggleTorch(); closeFlyoutSoon()
-        }
-        bind(fKeepOn, "LUÔN SÁNG: giữ màn hình không tự tắt khi bàn phím đang hiện.") {
-            prefs.keepScreenOn = !prefs.keepScreenOn; applyScreenFlags()
-            say(if (prefs.keepScreenOn) "Luôn sáng: BẬT" else "Luôn sáng: TẮT"); closeFlyoutSoon()
-        }
-        bind(fDim, "GIẢM SÁNG: hạ độ sáng màn hình xuống mức đã đặt (mặc định 50%). Chỉnh mức trong ứng dụng.") {
-            prefs.dimScreen = !prefs.dimScreen; applyScreenFlags()
-            say(if (prefs.dimScreen) "Giảm sáng: ${prefs.dimPercent}%" else "Giảm sáng: TẮT"); closeFlyoutSoon()
-        }
-        bind(fAutoEnter, "TỰ ENTER: tự gửi Enter sau mỗi mã quét được. Tắt nếu chỉ muốn chèn mã.") {
-            prefs.sendEnter = !prefs.sendEnter; updateUi()
-            say(if (prefs.sendEnter) "Tự Enter: BẬT" else "Tự Enter: TẮT"); closeFlyoutSoon()
-        }
 
         setupDragHandle(v.findViewById(R.id.dragHandle))
         buildTypePanel()
@@ -475,17 +500,21 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
             override fun onPasteAll(items: List<ClipItem>) = pasteClips(items)
             override fun onSearch() = startSearch()
             override fun onSearchCleared() { searchText = "" }
+            override fun onView(item: ClipItem) = showClipViewer(item)
         }).also {
             it.setListHeight(dp(prefs.clipHeightDp.coerceIn(CLIP_MIN, CLIP_MAX)))
             panelClipHost.removeAllViews()
             panelClipHost.addView(it.view)
         }
         Fonts.apply(v)
-        fxKb?.detach(); fxScan?.detach()
+        fxKb?.detach(); fxScan?.detach(); fxTop?.detach(); fxTools?.detach()
         fxKb = FxDrawable(panelType) { keyViews }.also { it.attach() }
         fxScan = FxDrawable(btnArea) { scanButtonViews }.also { it.attach() }
+        fxTop = FxDrawable(topArea) { topViews }.also { it.attach() }
+        fxTools = FxDrawable(toolsBox) { toolViews }.also { it.attach() }
         applyKbTheme()   // sau Fonts.apply để font theo giao diện không bị ghi đè
         applyScanTheme()
+        refreshCredit()
         applyScreenFlags()
         setMode(mode)
         updateUi()
@@ -493,33 +522,138 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     }
 
     /**
-     * Dựng lại hàng nút chức năng dưới theo bố cục người dùng đã lưu (thứ tự, kích thước, căn lề, ảnh PNG riêng)
-     * rồi gắn lại thao tác cho từng nút.
+     * Dựng lại toàn bộ các nút (hàng trên, hàng dưới, nhóm Công cụ) theo bố cục người dùng đã lưu
+     * (khu vực, thứ tự, kích thước, căn lề, ảnh PNG riêng) rồi gắn lại thao tác cho từng nút.
      */
     private fun rebuildScanButtons() {
         val json = prefs.scanLayoutJson
         val lay = ScanLayout.fromJson(json)
         ScanButtons.forgetBitmaps()
         val m = ScanButtons.makeAll(this, lay)
+        val custom = HashSet<String>()
         for ((k, b) in m) {
+            val hasImg = ScanButtons.hasCustomImage(this, lay, k)
+            if (hasImg) custom.add(k)
             ThemeRender.styleButton(
                 this, b, styleScan,
-                if (k == "tools") ThemeRender.Kind.TOGGLE else ThemeRender.Kind.NORMAL,
-                ScanButtons.hasCustomImage(this, lay, k)
+                if (ScanLayout.isToggle(k)) ThemeRender.Kind.TOGGLE else ThemeRender.Kind.NORMAL,
+                hasImg
             )
         }
-        scanButtonViews = m.values.toList()
-        btnTools = m.getValue("tools")
-        toolsCustom = ScanButtons.hasCustomImage(this, lay, "tools")
-        bind(btnTools, "CÔNG CỤ: mở danh sách camera, flash, luôn sáng, giảm sáng, tự Enter. Chạm lại để thu gọn.") { toggleFlyout() }
-        bindRepeat(m.getValue("del"), false) { handleDelete() }
-        bind(m.getValue("enter"), "ENTER: gửi phím Enter thủ công vào ô đang chọn.") { finishComposing(); sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER) }
-        bind(m.getValue("settings"), "CÀI ĐẶT: mở bảng tùy chỉnh chính của ứng dụng.") { openSettings() }
-        bind(m.getValue("switch"), "ĐỔI BÀN PHÍM: chuyển sang bàn phím khác.") { showPicker() }
+        btnMap = m
+        customKeys = custom
+        bindButtons(m)
+        topArea.removeAllViews()
+        topArea.addView(ScanButtons.buildRows(this, lay, m, lay.top, lay.perRowTop))
         btnArea.removeAllViews()
-        btnArea.addView(ScanButtons.buildRows(this, lay, m))
+        btnArea.addView(ScanButtons.buildRows(this, lay, m, lay.bottom, lay.perRowBottom))
+        topViews = lay.top.mapNotNull { m[it] }
+        scanButtonViews = lay.bottom.mapNotNull { m[it] }
+        toolViews = lay.tools.mapNotNull { m[it] }
+        renderTools()
         layoutSig = json
         updateUi()
+    }
+
+    /** Nút đang nằm trong nhóm Công cụ: dùng xong thì nhóm tự thu lại. */
+    private fun afterToolUse(key: String) {
+        if (btnMap[key]?.parent === toolsRow) closeFlyoutSoon()
+    }
+
+    private fun bindButtons(m: Map<String, ImageView>) {
+        fun hint(k: String) = ScanLayout.HINTS[k] ?: ""
+        bind(m.getValue("tools"), hint("tools")) { toggleFlyout() }
+        bind(m.getValue("scan"), hint("scan")) { setMode(0) }
+        bind(m.getValue("type"), hint("type")) { setMode(1) }
+        bind(m.getValue("clip"), hint("clip")) { setMode(2) }
+        bind(m.getValue("settings"), hint("settings")) { openSettings() }
+        bind(m.getValue("switch"), hint("switch")) { showPicker() }
+        bind(m.getValue("hide"), hint("hide")) { requestHideSelf(0) }
+        bind(m.getValue("cam"), hint("cam")) {
+            if (scanning) stopCamera() else startCamera(); afterToolUse("cam")
+        }
+        bind(m.getValue("flash"), hint("flash")) { toggleTorch(); afterToolUse("flash") }
+        bind(m.getValue("keepOn"), hint("keepOn")) {
+            prefs.keepScreenOn = !prefs.keepScreenOn; applyScreenFlags()
+            say(if (prefs.keepScreenOn) "Luôn sáng: BẬT" else "Luôn sáng: TẮT"); afterToolUse("keepOn")
+        }
+        bind(m.getValue("dim"), hint("dim")) {
+            prefs.dimScreen = !prefs.dimScreen; applyScreenFlags()
+            say(if (prefs.dimScreen) "Giảm sáng: ${prefs.dimPercent}%" else "Giảm sáng: TẮT"); afterToolUse("dim")
+        }
+        bindRepeat(m.getValue("del"), false) { handleDelete() }
+        bind(m.getValue("enter"), hint("enter")) { finishComposing(); sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER) }
+        bind(m.getValue("autoEnter"), hint("autoEnter")) {
+            prefs.sendEnter = !prefs.sendEnter; updateUi()
+            say(if (prefs.sendEnter) "Tự Enter: BẬT" else "Tự Enter: TẮT"); afterToolUse("autoEnter")
+        }
+        bind(m.getValue("sound"), hint("sound")) {
+            prefs.keySound = !prefs.keySound
+            if (prefs.keySound) keyClick()
+            updateUi()
+            say(if (prefs.keySound) "Âm thanh phím: BẬT" else "Âm thanh phím: TẮT"); afterToolUse("sound")
+        }
+        bind(m.getValue("soundPick"), hint("soundPick")) { openSoundPicker() }
+    }
+
+    private fun fxOf(v: View): FxDrawable? = when {
+        fxKb?.owns(v) == true -> fxKb
+        fxScan?.owns(v) == true -> fxScan
+        fxTop?.owns(v) == true -> fxTop
+        fxTools?.owns(v) == true -> fxTools
+        else -> null
+    }
+
+    // ----- Nhóm Công cụ: danh sách nút, hoặc dải chọn nhanh âm thanh -----
+    private fun renderTools() {
+        if (!::toolsRow.isInitialized) return
+        toolsRow.removeAllViews()
+        if (toolsMode == 1) { renderSoundPicker(); return }
+        for (b in toolViews) {
+            (b.parent as? ViewGroup)?.removeView(b)
+            toolsRow.addView(b, LinearLayout.LayoutParams(b.layoutParams.width, b.layoutParams.height).apply {
+                setMargins(dp(3), 0, dp(3), 0)
+            })
+        }
+        if (toolViews.isEmpty()) {
+            toolsRow.addView(TextView(this).apply {
+                text = "Nhóm Công cụ đang trống. Thêm nút trong Tùy chỉnh nút Scan."
+                textSize = 12f
+                setTextColor(ContextCompat.getColor(this@ScannerKeyboardService, R.color.muted))
+                setPadding(dp(8), dp(10), dp(8), dp(10))
+            })
+        }
+    }
+
+    private fun openSoundPicker() {
+        if (flyoutOpen) { toolsMode = 1; renderTools() } else openFlyout(1)
+    }
+
+    /** Dải chọn nhanh âm thanh: nút quay lại và 8 kiểu âm thanh đánh số, chạm để chọn và nghe thử ngay. */
+    private fun renderSoundPicker() {
+        fun chip(label: String, on: Boolean, click: () -> Unit): TextView = TextView(this).apply {
+            text = label
+            textSize = 15f
+            gravity = Gravity.CENTER
+            setTextColor(ContextCompat.getColor(this@ScannerKeyboardService, R.color.text))
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setBackgroundResource(R.drawable.bg_toggle)
+            isSelected = on
+            isClickable = true
+            setOnClickListener { click() }
+        }
+        val lp = { LinearLayout.LayoutParams(dp(40), dp(40)).apply { setMargins(dp(3), 0, dp(3), 0) } }
+        toolsRow.addView(chip("‹", false) { toolsMode = 0; renderTools() }, lp())
+        for (i in KeySound.NAMES.indices) {
+            toolsRow.addView(chip("${i + 1}", prefs.keySoundType == i && prefs.keySound) {
+                prefs.keySound = true
+                prefs.keySoundType = i
+                keyClick()
+                say("Âm thanh phím: ${KeySound.NAMES[i]}")
+                updateUi()
+                renderTools()
+            }, lp())
+        }
     }
 
     /** Nút thường: chạm thực hiện, giữ lâu hiện hướng dẫn, có hiệu ứng nhún nhẹ. */
@@ -527,12 +661,6 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         view.setOnClickListener { action() }
         view.setOnLongClickListener { showHint(hint); true }
         pressEffect(view)
-    }
-
-    private fun fxOf(v: View): FxDrawable? = when {
-        fxKb?.owns(v) == true -> fxKb
-        fxScan?.owns(v) == true -> fxScan
-        else -> null
     }
 
     /** Chạm xuống: hiệu ứng theo giao diện (nhún, gợn sóng, hạt sáng...) hoặc nhún mặc định nếu không thuộc bảng nào. */
@@ -573,6 +701,9 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
                     touchDown(v, e)
                     action()
                     repeatAction = action
+                    repeatStart = SystemClock.uptimeMillis()
+                    repeatCount = 0
+                    handler.removeCallbacks(repeatRunnable)
                     handler.postDelayed(repeatRunnable, 400)
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
@@ -588,6 +719,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
 
     private fun showHint(text: String) {
         if (!::tvHint.isInitialized) return
+        if (mode != 0) { Toast.makeText(this, text, Toast.LENGTH_SHORT).show(); return }   // khung camera chỉ hiện ở chế độ Quét
         handler.removeCallbacks(hideHint)
         tvHint.text = text
         tvHint.alpha = 0f
@@ -601,34 +733,34 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     // ----- Danh sách công cụ mở / thu có hoạt ảnh -----
     private fun toggleFlyout() { if (flyoutOpen) closeFlyout() else openFlyout() }
 
-    private fun openFlyout() {
+    private fun openFlyout(startMode: Int = 0) {
+        toolsMode = startMode
         flyoutOpen = true
-        flyout.animate().cancel()
-        flyout.visibility = View.VISIBLE
-        flyout.pivotX = 0f
-        flyout.pivotY = dp(60).toFloat()
-        flyout.alpha = 0f
-        flyout.translationY = dp(14).toFloat()
-        flyout.scaleX = 0.85f
-        flyout.scaleY = 0.85f
-        flyout.animate().alpha(1f).translationY(0f).scaleX(1f).scaleY(1f)
+        renderTools()
+        toolsBox.animate().cancel()
+        toolsBox.visibility = View.VISIBLE
+        toolsBox.pivotX = 0f
+        toolsBox.pivotY = 0f
+        toolsBox.alpha = 0f
+        toolsBox.translationY = -dp(10).toFloat()
+        toolsBox.scaleX = 0.9f
+        toolsBox.scaleY = 0.9f
+        toolsBox.animate().alpha(1f).translationY(0f).scaleX(1f).scaleY(1f)
             .setDuration(190).setInterpolator(DecelerateInterpolator()).start()
-        for (i in 0 until flyout.childCount) {
-            val item = flyout.getChildAt(i)
+        for (i in 0 until toolsRow.childCount) {
+            val item = toolsRow.getChildAt(i)
             item.alpha = 0f
             item.animate().alpha(1f).setStartDelay(35L * i).setDuration(160).start()
         }
-        tvStatus.animate().alpha(0f).setDuration(150).start()
         updateUi()
     }
 
     private fun closeFlyout() {
         if (!flyoutOpen) return
         flyoutOpen = false
-        flyout.animate().cancel()
-        flyout.animate().alpha(0f).translationY(dp(10).toFloat()).scaleX(0.9f).scaleY(0.9f)
-            .setDuration(150).withEndAction { if (!flyoutOpen) flyout.visibility = View.GONE }.start()
-        tvStatus.animate().alpha(1f).setDuration(150).start()
+        toolsBox.animate().cancel()
+        toolsBox.animate().alpha(0f).translationY(-dp(8).toFloat()).scaleX(0.92f).scaleY(0.92f)
+            .setDuration(150).withEndAction { if (!flyoutOpen) { toolsBox.visibility = View.GONE; toolsMode = 0 } }.start()
         updateUi()
     }
 
@@ -693,18 +825,21 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     }
 
     private fun updateUi() {
-        if (!::btnTools.isInitialized) return
-        fCam.isSelected = scanning
-        fCam.setImageResource(if (scanning) R.drawable.ic_camera else R.drawable.ic_camera_off)
-        fFlash.isSelected = torchOn
-        fKeepOn.isSelected = prefs.keepScreenOn
-        fDim.isSelected = prefs.dimScreen
-        fAutoEnter.isSelected = prefs.sendEnter
-        btnTools.isSelected = flyoutOpen
-        if (!toolsCustom) btnTools.setImageResource(if (flyoutOpen) R.drawable.ic_close else R.drawable.ic_tune)
-        tabScan.isSelected = mode == 0
-        tabType.isSelected = mode == 1
-        tabClip.isSelected = mode == 2
+        if (btnMap.isEmpty()) return
+        fun sel(k: String, on: Boolean) { btnMap[k]?.isSelected = on }
+        sel("cam", scanning)
+        sel("flash", torchOn)
+        sel("keepOn", prefs.keepScreenOn)
+        sel("dim", prefs.dimScreen)
+        sel("autoEnter", prefs.sendEnter)
+        sel("sound", prefs.keySound)
+        sel("tools", flyoutOpen)
+        sel("scan", mode == 0)
+        sel("type", mode == 1)
+        sel("clip", mode == 2)
+        if ("cam" !in customKeys) btnMap["cam"]?.setImageResource(if (scanning) R.drawable.ic_camera else R.drawable.ic_camera_off)
+        if ("sound" !in customKeys) btnMap["sound"]?.setImageResource(if (prefs.keySound) R.drawable.ic_volume else R.drawable.ic_volume_off)
+        if ("tools" !in customKeys) btnMap["tools"]?.setImageResource(if (flyoutOpen) R.drawable.ic_close else R.drawable.ic_tune)
         overlay.active = scanning
     }
 
@@ -731,7 +866,8 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         panelScan.visibility = if (m == 0) View.VISIBLE else View.GONE
         panelType.visibility = if (m == 1) View.VISIBLE else View.GONE
         panelClipHost.visibility = if (m == 2) View.VISIBLE else View.GONE
-        if (m != 0) { closeFlyout(); stopCamera() } else if (prefs.autoStart && !scanning) startCamera()
+        closeFlyout()
+        if (m != 0) stopCamera() else if (prefs.autoStart && !scanning) startCamera()
         if (m == 2) clipPanel?.onShown()
         updateUi()
     }
@@ -751,6 +887,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         val themeChanged = loadTheme()
         if (root != null && (themeChanged || prefs.scanLayoutJson != layoutSig)) rebuildScanButtons()
         if (root != null && themeChanged) { buildTypePanel(); applyKbTheme(); applyScanTheme() }
+        refreshCredit()
         if (prefs.keySound) sounds()
         ingestClipboard(true) // lấy nội dung đã sao chép trong lúc bàn phím chưa chạy
         applyScreenFlags(true)
@@ -761,7 +898,8 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         super.onWindowHidden()
         windowVisible = false
         telex.reset()
-        if (::flyout.isInitialized) { flyoutOpen = false; flyout.visibility = View.GONE }
+        if (::toolsBox.isInitialized) { flyoutOpen = false; toolsMode = 0; toolsBox.animate().cancel(); toolsBox.visibility = View.GONE }
+        clipViewer?.dismiss()
         stopCamera()
         applyScreenFlags(false)
         registry.currentState = Lifecycle.State.CREATED
@@ -778,6 +916,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         soundHolder?.release()
         try { clipMgr?.removePrimaryClipChangedListener(clipListener) } catch (_: Throwable) { }
         clipPanel?.release()
+        clipViewer?.dismiss()
         ioExec.shutdown()
         super.onDestroy()
     }
@@ -897,10 +1036,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
             } catch (_: Exception) { }
         }
         if (vibMs > 0) {
-            try {
-                getSystemService(Vibrator::class.java)
-                    ?.vibrate(VibrationEffect.createOneShot(vibMs.toLong(), VibrationEffect.DEFAULT_AMPLITUDE))
-            } catch (_: Exception) { }
+            Haptics.pulse(this, vibMs.toLong())
         }
     }
 
@@ -917,6 +1053,8 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         val t = ThemeStore.parse(raw).current()
         styleScan = t?.scan ?: PanelStyle()
         styleKb = t?.kb ?: PanelStyle()
+        spaceStyle = t?.space ?: SpaceStyle()
+        SpaceRender.forget()
         return true
     }
 
@@ -948,12 +1086,16 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     }
 
     private fun applyKbText() {
-        for (k in keyViews) if (k is TextView) ThemeRender.styleText(k, styleKb)
+        for (k in keyViews) if (k is TextView) {
+            if (k === spaceView) SpaceRender.styleLabel(k, styleKb, spaceStyle, vn) else ThemeRender.styleText(k, styleKb)
+        }
     }
 
     /** Nền của bảng Scan + font của dòng trạng thái / gợi ý (bảng Scan không có chữ nào khác). */
     private fun applyScanTheme() {
         fxScan?.style = styleScan
+        fxTop?.style = styleScan
+        fxTools?.style = styleScan
         applyLayoutTo(panelScan, styleScan)
         panelScan.background = ThemeRender.panelBackground(this, styleScan)
         if (!scanTextCaptured) {
@@ -1010,9 +1152,8 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         val b = newRow()
         addKey(b, if (layer == 0) "?123" else "ABC", 1.5f, KS.SPECIAL) { layer = if (layer == 0) 1 else 0; buildTypePanel() }
         addKey(b, if (vn) "VN" else "EN", 1.2f, KS.SPECIAL) { finishComposing(); vn = !vn; buildTypePanel() }
-        addIconKey(b, R.drawable.ic_globe, 1.2f, KS.SPECIAL) { showPicker() }
         addKey(b, ",", 1f, KS.NORMAL) { type(",") }
-        addKey(b, "", 3f, KS.NORMAL) { type(" ") }          // phím cách
+        addSpaceKey(b)                                      // phím cách: vuốt ngang để di chuyển con trỏ
         addKey(b, ".", 1f, KS.NORMAL) { type(".") }
         addIconKey(b, R.drawable.ic_enter, 1.5f, KS.ACCENT) {
             if (searchActive) endSearch() else { finishComposing(); sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER) }
@@ -1089,6 +1230,73 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         val label = if (letter && shift > 0) c.uppercaseChar().toString() else c.toString()
         val key = addKey(row, label, 1f, KS.NORMAL) { typeChar(c, letter) }
         if (letter) letterKeys.add(key to c)
+    }
+
+    /** Phím cách: kiểu riêng theo giao diện; chạm để gõ dấu cách, vuốt ngang để di chuyển con trỏ. */
+    private fun addSpaceKey(row: LinearLayout) {
+        val sp = spaceStyle
+        val tv = TextView(this)
+        tv.gravity = Gravity.CENTER
+        tv.setSingleLine()
+        tv.setTextColor(ContextCompat.getColor(this, R.color.text))
+        tv.textSize = 14f * styleKb.fontScale / 100f
+        tv.isClickable = true
+        tv.background = SpaceRender.background(this, styleKb, sp)
+        ThemeRender.elevate(tv, SpaceRender.shapeStyle(styleKb, sp))
+        spaceView = tv
+        keyViews.add(tv)
+        place(row, tv, sp.weight / 10f)
+        bindSpace(tv)
+    }
+
+    /** Dịch con trỏ sang trái / phải một ký tự (kết thúc chữ Telex đang gõ dở trước). */
+    private fun moveCursor(dir: Int) {
+        finishComposing()
+        sendDownUpKeyEvents(if (dir > 0) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_LEFT)
+        if (spaceStyle.swipeHaptic) keyHaptic()
+    }
+
+    private fun bindSpace(v: View) {
+        val slop = ViewConfiguration.get(this).scaledTouchSlop
+        var downX = 0f
+        var lastX = 0f
+        var swiping = false
+        v.setOnTouchListener { view, e ->
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downX = e.x
+                    lastX = e.x
+                    swiping = false
+                    keyClick()
+                    keyHaptic()
+                    view.isPressed = true
+                    view.drawableHotspotChanged(e.x, e.y)
+                    touchDown(view, e)
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val sp = spaceStyle
+                    if (sp.swipe && !searchActive) {
+                        if (!swiping && abs(e.x - downX) > slop * 1.5f) { swiping = true; lastX = downX }
+                        if (swiping) {
+                            val step = dp(sp.swipeStep.coerceIn(6, 40)).toFloat()
+                            while (e.x - lastX >= step) { moveCursor(1); lastX += step }
+                            while (lastX - e.x >= step) { moveCursor(-1); lastX -= step }
+                        }
+                    }
+                }
+                MotionEvent.ACTION_UP -> {
+                    view.isPressed = false
+                    touchUp(view)
+                    val inside = e.x >= 0f && e.x <= view.width && e.y >= 0f && e.y <= view.height
+                    if (!swiping && inside) type(" ")
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    view.isPressed = false
+                    touchUp(view)
+                }
+            }
+            true
+        }
     }
 
     private fun addRepeatKey(row: LinearLayout, weight: Float) {
