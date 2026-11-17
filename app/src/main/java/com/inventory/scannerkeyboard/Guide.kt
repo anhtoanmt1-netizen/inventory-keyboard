@@ -96,7 +96,7 @@ private class GuideBuilder(private val a: Activity, private val host: LinearLayo
     private fun col(id: Int) = ContextCompat.getColor(a, id)
     private val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
     private val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
-    private fun lp(w: Int, h: Int) = LinearLayout.LayoutParams(w, h)
+    private fun lp(w: Int, h: Int, weight: Float = 0f) = LinearLayout.LayoutParams(w, h, weight)
 
     private val lay = ScanLayout.fromJson(Prefs(a).scanLayoutJson)
     private val theme = ThemeStore.load(a).current()

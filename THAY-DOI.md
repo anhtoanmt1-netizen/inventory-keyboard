@@ -26,6 +26,9 @@ và toàn bộ giá trị độ nhạy đều giữ nguyên từng dòng. Các f
 4. **Chỉnh sửa nút**: thêm mục "CHỈNH SỬA NÚT" chọn trực tiếp từng nút ở cả ba khu vực (ô nút đúng hình thật), mỗi nút có hình ảnh riêng (THÊM / ĐỔI HÌNH ẢNH, kích thước, vị trí, thu phóng).
 5. **Danh sách chọn nút**: thiết kế lại cho danh sách "thêm vào Công cụ", danh sách nút đang có trong Công cụ (và hai hàng còn lại), hộp thoại chuyển khu vực: mỗi nút có hình thật, tên, mô tả, vị trí hiện tại, cùng phong cách thẻ của ứng dụng.
 
+## Sửa lỗi build
+- Guide.kt: hàm `lp` nhận thêm tham số trọng số (sửa lỗi "Too many arguments" ở 4 chỗ khiến không build được APK).
+
 ## Lưu ý
 - Hàng trên có thêm nút Clipboard (danh sách yêu cầu không nhắc, nhưng bỏ đi sẽ mất chức năng hiện có).
 - Phiên bản này chưa được biên dịch hay chạy thử trong môi trường soạn thảo (không có Android SDK). Hãy build bằng GitHub Actions và thử các mục ở trên.
