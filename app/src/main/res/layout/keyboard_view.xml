@@ -93,7 +93,7 @@
                 android:textSize="12sp" />
         </FrameLayout>
 
-        <Space android:layout_width="match_parent" android:layout_height="6dp" />
+        <Space android:id="@+id/gapBelowCamera" android:layout_width="match_parent" android:layout_height="6dp" />
 
         <!-- Hàng nút chức năng dưới: được dựng bằng code theo bố cục người dùng chọn (Tùy chỉnh nút Scan) -->
         <LinearLayout

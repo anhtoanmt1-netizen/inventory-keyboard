@@ -46,7 +46,10 @@ data class ScanLayout(
     val align: Int = ALIGN_CENTER,
     val grid: Boolean = true,     // true: căn theo cột (lưới), false: mỗi hàng tự căn riêng
     val buttons: Map<String, BtnCfg> = emptyMap(),
-    val cornerDp: Int = -1        // bo góc các nút (dp, 0..30); -1 = theo giao diện đang dùng
+    val cornerDp: Int = -1,       // bo góc các nút (dp, 0..30); -1 = theo giao diện đang dùng
+    val gapTopBelowDp: Int = 0,   // khoảng cách giữa hàng trên và bàn phím / khung camera bên dưới (dp)
+    val gapBottomAboveDp: Int = 6,// khoảng cách giữa bàn phím / khung camera và hàng dưới (dp)
+    val rowGapDp: Int = 4         // khoảng cách dọc giữa các hàng nút trong cùng một khu vực (dp)
 ) {
     companion object {
         const val ALIGN_LEFT = 0
@@ -178,7 +181,10 @@ data class ScanLayout(
                     o.optInt("h", d.heightDp).coerceIn(32, 96), o.optInt("scale", d.scale).coerceIn(60, 160),
                     o.optInt("gap", d.gapDp).coerceIn(0, 24), o.optInt("align", d.align).coerceIn(0, 4),
                     o.optBoolean("grid", d.grid), btns,
-                    o.optInt("corner", d.cornerDp).coerceIn(-1, 30)
+                    o.optInt("corner", d.cornerDp).coerceIn(-1, 30),
+                    o.optInt("gTop", d.gapTopBelowDp).coerceIn(0, 24),
+                    o.optInt("gBot", d.gapBottomAboveDp).coerceIn(0, 24),
+                    o.optInt("rGap", d.rowGapDp).coerceIn(0, 24)
                 )
             } catch (_: Throwable) { ScanLayout() }
         }
@@ -221,7 +227,8 @@ data class ScanLayout(
         return JSONObject().put("ver", 2)
             .put("top", JSONArray(top)).put("bottom", JSONArray(bottom)).put("tools", JSONArray(tools))
             .put("pTop", perRowTop).put("pBot", perRowBottom).put("w", widthDp).put("h", heightDp)
-            .put("scale", scale).put("gap", gapDp).put("align", align).put("grid", grid).put("corner", cornerDp).put("buttons", b).toString()
+            .put("scale", scale).put("gap", gapDp).put("align", align).put("grid", grid).put("corner", cornerDp).put("gTop", gapTopBelowDp).put("gBot", gapBottomAboveDp)
+            .put("rGap", rowGapDp).put("buttons", b).toString()
     }
 
     /** Tên các file ảnh đang được dùng. */
@@ -317,7 +324,7 @@ object ScanButtons {
             val row = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding((4 * d).toInt(), (2 * d).toInt(), (4 * d).toInt(), (2 * d).toInt())
+                setPadding((4 * d).toInt(), (lay.rowGapDp * d / 2f).toInt(), (4 * d).toInt(), (lay.rowGapDp * d / 2f).toInt())
             }
             val rowH = chunk.maxOf { buttons[it]!!.layoutParams.height }
             if (lay.grid) {
@@ -355,7 +362,7 @@ object ScanButtons {
                 }
                 if (lay.align == ScanLayout.ALIGN_AROUND) spacer(0.5f)
             }
-            root.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, rowH + (4 * d).toInt()))
+            root.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, rowH + (lay.rowGapDp * d / 2f).toInt() * 2))
         }
         return root
     }
@@ -391,6 +398,9 @@ object ScanButtons {
         )
         val iv = makeButton(ctx, t, key)
         ThemeRender.styleButton(ctx, iv, st, if (ScanLayout.isToggle(key)) ThemeRender.Kind.TOGGLE else ThemeRender.Kind.NORMAL, hasCustomImage(ctx, t, key))
+        // Ô nút chỉ để xem: không nhận chạm riêng, để chạm vào giữa nút cũng chọn được dòng / ô chứa nó
+        iv.isClickable = false
+        iv.isFocusable = false
         return iv
     }
 

@@ -192,7 +192,8 @@ data class ThemeState(
 
 /** Lưu / đọc giao diện. Dữ liệu nằm riêng trong "kb_themes", không đụng tới các cài đặt khác của ứng dụng. */
 object ThemeStore {
-    private const val SP = "kb_themes"
+    const val NAME = "kb_themes"
+    private const val SP = NAME
     private const val KEY = "json"
 
     fun raw(ctx: Context): String =

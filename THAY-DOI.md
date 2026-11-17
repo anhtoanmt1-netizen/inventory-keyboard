@@ -29,6 +29,16 @@ và toàn bộ giá trị độ nhạy đều giữ nguyên từng dòng. Các f
 ## Sửa lỗi build
 - Guide.kt: hàm `lp` nhận thêm tham số trọng số (sửa lỗi "Too many arguments" ở 4 chỗ khiến không build được APK).
 
+## Đợt sửa lỗi và bổ sung (bản 2.2)
+- **Bảng Công cụ nổi không hiển thị**: nguyên nhân là tọa độ cửa sổ nổi tính theo màn hình trong khi hệ thống tính theo cửa sổ bàn phím, làm bảng bị đặt ra ngoài màn hình. Đã sửa tọa độ; thêm bước tự kiểm tra, nếu máy vẫn không hiển thị đúng thì tự chuyển sang hiện ngay dưới hàng trên.
+- **Xem trước trong Tùy chỉnh nút Scan** nay đúng thứ tự thật: Công cụ nổi phía trên, hàng trên, khung camera / bàn phím, hàng dưới; chạm một nút trong xem trước để chọn chỉnh nút đó.
+- **Chọn nút ở giữa không được**: các ô nút chỉ để hiển thị nên không còn chặn chạm; chạm vào giữa nút là chọn được (cả bảng chọn, danh sách và ô hướng dẫn).
+- **Khoảng cách giữa các hàng**: 3 thanh mới (hàng trên ↔ bàn phím / camera, bàn phím / camera ↔ hàng dưới, giữa các hàng nút trong cùng khu vực), mặc định giữ đúng khoảng cách cũ.
+- **Đồng bộ tùy chỉnh**:
+  - Bàn phím nay lắng nghe thay đổi giao diện và cài đặt ngay cả khi đang hiện, không phải ẩn / mở lại.
+  - Tùy chỉnh nút Scan tự động lưu (sau 0,35 giây hoặc khi thoát), không còn mất thay đổi nếu quên bấm Áp dụng.
+  - Màn Cài đặt chính lưu ngay khi đổi công tắc hoặc ngừng gõ ô số (trước đây chỉ lưu khi thoát màn hình).
+
 ## Lưu ý
 - Hàng trên có thêm nút Clipboard (danh sách yêu cầu không nhắc, nhưng bỏ đi sẽ mất chức năng hiện có).
 - Phiên bản này chưa được biên dịch hay chạy thử trong môi trường soạn thảo (không có Android SDK). Hãy build bằng GitHub Actions và thử các mục ở trên.

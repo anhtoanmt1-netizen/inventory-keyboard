@@ -9,6 +9,8 @@ import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
@@ -34,7 +36,7 @@ import kotlin.math.roundToInt
  * Màn hình "Tùy chỉnh nút Scan": ba khu vực nút (hàng trên, hàng dưới, nhóm Công cụ), di chuyển nút giữa các
  * khu vực, sắp xếp (kéo thả), tối đa 10 nút mỗi hàng, kích thước, thu phóng, khoảng cách, căn lề,
  * ảnh PNG riêng cho từng nút, xem trước trực tiếp, áp dụng / khôi phục mặc định.
- * Mọi thay đổi chỉ có hiệu lực trên bàn phím sau khi bấm ÁP DỤNG.
+ * Mọi thay đổi tự động lưu (sau khoảng 0,35 giây hoặc khi thoát màn hình) và bàn phím nhận ngay, không cần bấm nút.
  */
 class ButtonLayoutActivity : Activity() {
 
@@ -76,7 +78,7 @@ class ButtonLayoutActivity : Activity() {
             text = "Tùy chỉnh nút Scan"; textSize = 20f; setTextColor(col(R.color.text)); setTypeface(null, android.graphics.Typeface.BOLD)
         })
         root.addView(TextView(this).apply {
-            text = "Sắp xếp, đổi kích thước, thay hình và chuyển các nút giữa hàng trên, hàng dưới (bảng Scan) và nhóm Công cụ. Xem trước ngay bên dưới, bấm ÁP DỤNG để dùng trên bàn phím."
+            text = "Sắp xếp, đổi kích thước, thay hình và chuyển các nút giữa hàng trên, hàng dưới (bảng Scan) và nhóm Công cụ. Xem trước ngay bên dưới. Mọi thay đổi được tự động lưu và áp dụng cho bàn phím ngay."
             textSize = 12f; setTextColor(col(R.color.muted)); setPadding(0, dp(4), 0, dp(8))
         })
         tvDirty = TextView(this).apply {
@@ -108,6 +110,10 @@ class ButtonLayoutActivity : Activity() {
         seekRow(g, "Khoảng cách ngang giữa các nút", 0, 24, { cfg.gapDp }, "dp") { cfg = cfg.copy(gapDp = it); changed() }
         label(g, "Căn lề")
         chips(g, listOf("Trái", "Giữa", "Phải", "Dàn đều", "Cách đều"), { cfg.align }) { cfg = cfg.copy(align = it); changed() }
+        label(g, "KHOẢNG CÁCH GIỮA CÁC HÀNG")
+        seekRow(g, "Hàng trên ↔ bàn phím / khung camera", 0, 24, { cfg.gapTopBelowDp }, "dp") { cfg = cfg.copy(gapTopBelowDp = it); changed() }
+        seekRow(g, "Bàn phím / khung camera ↔ hàng dưới", 0, 24, { cfg.gapBottomAboveDp }, "dp") { cfg = cfg.copy(gapBottomAboveDp = it); changed() }
+        seekRow(g, "Giữa các hàng nút trong cùng một khu vực", 0, 24, { cfg.rowGapDp }, "dp") { cfg = cfg.copy(rowGapDp = it); changed() }
         val gridRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         gridRow.addView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -151,7 +157,7 @@ class ButtonLayoutActivity : Activity() {
         e.addView(editorBox)
 
         // --- Hành động ---
-        root.addView(button("ÁP DỤNG", true) { applyLayout() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)).apply { topMargin = dp(16) })
+        root.addView(button("LƯU VÀ ÁP DỤNG NGAY", true) { applyLayout() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)).apply { topMargin = dp(16) })
         root.addView(button("KHÔI PHỤC MẶC ĐỊNH", false) { confirmReset() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)).apply { topMargin = dp(8) })
         Fonts.apply(root)
         return sv
@@ -211,9 +217,36 @@ class ButtonLayoutActivity : Activity() {
     }
 
     // ------------------------------------------------------------------ cập nhật
+    private val saveHandler = Handler(Looper.getMainLooper())
+    private val saveRunnable = Runnable { persist() }
+
+    /** Có thay đổi: cập nhật xem trước và tự động lưu (áp dụng ngay cho bàn phím) sau một khoảng ngắn. */
     private fun changed() {
         refreshPreview()
-        tvDirty.visibility = if (cfg != saved) View.VISIBLE else View.GONE
+        if (cfg != saved) {
+            tvDirty.text = "● Đang lưu…"
+            tvDirty.visibility = View.VISIBLE
+            saveHandler.removeCallbacks(saveRunnable)
+            saveHandler.postDelayed(saveRunnable, 350L)
+        }
+    }
+
+    /** Ghi bố cục vào cài đặt; bàn phím nhận thay đổi ngay (xem listener trong ScannerKeyboardService). */
+    private fun persist() {
+        if (cfg == saved) return
+        prefs.scanLayoutJson = cfg.toJson()
+        saved = cfg
+        cleanupImages(cfg.usedImages())
+        if (::tvDirty.isInitialized) {
+            tvDirty.text = "✓ Đã tự động lưu và áp dụng cho bàn phím"
+            tvDirty.visibility = View.VISIBLE
+        }
+    }
+
+    override fun onPause() {
+        saveHandler.removeCallbacks(saveRunnable)
+        persist()
+        super.onPause()
     }
 
     /** Kiểu nút dùng cho xem trước và danh sách: giao diện đang dùng, kèm bo góc người dùng đang chọn. */
@@ -235,13 +268,19 @@ class ButtonLayoutActivity : Activity() {
         previewHost.removeAllViews()
         val m = ScanButtons.makeAll(this, cfg)
         val st = tileStyle()
-        for ((k, b) in m) ThemeRender.styleButton(
-            this, b, st, if (ScanLayout.isToggle(k)) ThemeRender.Kind.TOGGLE else ThemeRender.Kind.NORMAL,
-            ScanButtons.hasCustomImage(this, cfg, k)
-        )
-        previewHost.addView(caption("HÀNG TRÊN"))
-        previewHost.addView(ScanButtons.buildRows(this, cfg, m, cfg.top, cfg.perRowTop))
-        previewHost.addView(caption("NHÓM CÔNG CỤ (mở ra bên dưới hàng trên)"))
+        for ((k, b) in m) {
+            ThemeRender.styleButton(
+                this, b, st, if (ScanLayout.isToggle(k)) ThemeRender.Kind.TOGGLE else ThemeRender.Kind.NORMAL,
+                ScanButtons.hasCustomImage(this, cfg, k)
+            )
+            // Chạm một nút trong xem trước để chọn chỉnh nút đó
+            b.setOnClickListener { selected = k; refreshList(); refreshPicker(); refreshEditor() }
+            b.isSelected = false
+        }
+        fun spacer(dpv: Int) = View(this).also { it.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(dpv)) }
+
+        // 1) Nhóm Công cụ: bảng NỔI phía trên bàn phím (ngoài khung bàn phím)
+        previewHost.addView(caption("NHÓM CÔNG CỤ · bảng nổi phía trên bàn phím"))
         val strip = ScanButtons.buildStrip(this, m, cfg.tools)
         val box = HorizontalScrollView(this).apply {
             setBackgroundResource(R.drawable.bg_flyout); setPadding(dp(6), dp(6), dp(6), dp(6))
@@ -252,10 +291,30 @@ class ButtonLayoutActivity : Activity() {
             text = "(trống)"; textSize = 12f; setTextColor(col(R.color.muted)); setPadding(dp(8), dp(8), dp(8), dp(8))
         })
         previewHost.addView(box, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            marginStart = dp(8)
+            marginStart = dp(8); bottomMargin = dp(2)
         })
-        previewHost.addView(caption("HÀNG DƯỚI (BẢNG SCAN)"))
-        previewHost.addView(ScanButtons.buildRows(this, cfg, m, cfg.bottom, cfg.perRowBottom))
+        previewHost.addView(TextView(this).apply {
+            text = "▼ nổi trên bàn phím, mở khi bấm nút Công cụ"; textSize = 9f; setTextColor(col(R.color.muted))
+            setPadding(dp(16), 0, 0, dp(4))
+        })
+
+        // 2) Khung bàn phím: hàng trên, khung camera / bàn phím, hàng dưới (đúng thứ tự và khoảng cách thật)
+        val kb = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable().apply { setColor(0x14FFFFFF); setStroke(dp(1), col(R.color.stroke)) }
+            setPadding(0, dp(4), 0, dp(4))
+        }
+        kb.addView(caption("HÀNG TRÊN"))
+        kb.addView(ScanButtons.buildRows(this, cfg, m, cfg.top, cfg.perRowTop))
+        kb.addView(spacer(cfg.gapTopBelowDp))
+        kb.addView(TextView(this).apply {
+            text = "KHUNG CAMERA / BÀN PHÍM"; textSize = 10f; gravity = Gravity.CENTER; setTextColor(col(R.color.muted)); letterSpacing = 0.05f
+            background = GradientDrawable().apply { setColor(0xFF0B0F17.toInt()); cornerRadius = dp(10).toFloat() }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply { setMargins(dp(8), 0, dp(8), 0) })
+        kb.addView(spacer(cfg.gapBottomAboveDp))
+        kb.addView(caption("HÀNG DƯỚI (BẢNG SCAN)"))
+        kb.addView(ScanButtons.buildRows(this, cfg, m, cfg.bottom, cfg.perRowBottom))
+        previewHost.addView(kb, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
     // ------------------------------------------------------------------ danh sách nút + kéo thả + chuyển khu vực
@@ -522,11 +581,9 @@ class ButtonLayoutActivity : Activity() {
 
     // ------------------------------------------------------------------ áp dụng / khôi phục / thoát
     private fun applyLayout() {
-        prefs.scanLayoutJson = cfg.toJson()
-        saved = cfg
-        cleanupImages(cfg.usedImages())
-        changed()
-        Toast.makeText(this, "Đã áp dụng. Mở lại bàn phím để thấy thay đổi.", Toast.LENGTH_SHORT).show()
+        saveHandler.removeCallbacks(saveRunnable)
+        persist()
+        Toast.makeText(this, "Đã lưu và áp dụng ngay cho bàn phím.", Toast.LENGTH_SHORT).show()
     }
 
     private fun confirmReset() {
@@ -545,12 +602,7 @@ class ButtonLayoutActivity : Activity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        if (cfg == saved) { super.onBackPressed(); return }
-        AlertDialog.Builder(this)
-            .setTitle("Có thay đổi chưa áp dụng")
-            .setNegativeButton("Ở lại", null)
-            .setNeutralButton("Bỏ thay đổi") { _, _ -> cleanupImages(saved.usedImages()); finish() }
-            .setPositiveButton("Áp dụng") { _, _ -> applyLayout(); finish() }
-            .show()
+        persist()   // mọi thay đổi đã được tự động lưu; thoát là xong
+        super.onBackPressed()
     }
 }

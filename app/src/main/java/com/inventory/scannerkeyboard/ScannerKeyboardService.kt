@@ -3,6 +3,7 @@ package com.inventory.scannerkeyboard
 import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.ClipData
+import android.content.SharedPreferences
 import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
@@ -85,6 +86,8 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     private lateinit var toolsBox: FrameLayout       // nhóm Công cụ: bảng nổi phía trên bàn phím (PopupWindow)
     private lateinit var toolsRow: LinearLayout
     private var toolsPopup: PopupWindow? = null
+    private var toolsPopupFailed = false            // máy không hiển thị đúng cửa sổ nổi: dùng phương án dự phòng
+    private lateinit var gapBelowCamera: View        // khoảng trống giữa khung camera và hàng dưới
     private var toolsInline = false                  // phương án dự phòng: hiện ngay trong bàn phím nếu máy không cho cửa sổ nổi
     private var btnCorner = -1                       // bo góc nút Scan (dp) do người dùng chọn; -1 = theo giao diện
     private lateinit var creditView: CreditView
@@ -209,6 +212,8 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         super.onCreate()
         registry.currentState = Lifecycle.State.CREATED
         prefs = Prefs(this)
+        getSharedPreferences(Prefs.NAME, MODE_PRIVATE).registerOnSharedPreferenceChangeListener(prefListener)
+        getSharedPreferences(ThemeStore.NAME, MODE_PRIVATE).registerOnSharedPreferenceChangeListener(prefListener)
         vn = true
         clipStore = ClipStore(this)
         try {
@@ -488,6 +493,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         btnArea = v.findViewById(R.id.btnArea)
         topArea = v.findViewById(R.id.topArea)
         buildToolsBox()
+        gapBelowCamera = v.findViewById(R.id.gapBelowCamera)
         creditView = v.findViewById(R.id.creditView)
 
         cameraBox.layoutParams.height = dp(prefs.cameraHeightDp.coerceIn(120, 420))
@@ -555,6 +561,9 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         topViews = lay.top.mapNotNull { m[it] }
         scanButtonViews = lay.bottom.mapNotNull { m[it] }
         toolViews = lay.tools.mapNotNull { m[it] }
+        // Khoảng cách giữa hàng trên - bàn phím / khung camera - hàng dưới
+        topArea.setPadding(0, 0, 0, dp(lay.gapTopBelowDp))
+        gapBelowCamera.layoutParams = gapBelowCamera.layoutParams.apply { height = dp(lay.gapBottomAboveDp) }
         fxScan?.style = btnStyle(); fxTop?.style = btnStyle(); fxTools?.style = btnStyle()
         renderTools()
         layoutSig = json
@@ -772,19 +781,21 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         val h = toolsBox.measuredHeight
         toolsBox.pivotX = w / 2f
         toolsBox.pivotY = h.toFloat()
+        if (toolsPopupFailed) { showToolsInline(); return }
         try {
             val r = root ?: throw IllegalStateException("no root")
-            val rl = IntArray(2)
-            r.getLocationOnScreen(rl)
+            // Tọa độ của cửa sổ con tính theo cửa sổ bàn phím (không phải theo màn hình), nên nằm phía trên là giá trị âm.
+            val rw = IntArray(2)
+            r.getLocationInWindow(rw)
             var x = dp(8)
             val tb = btnMap["tools"]
             if (tb != null && tb.isAttachedToWindow) {
-                val tl = IntArray(2)
-                tb.getLocationOnScreen(tl)
-                x = tl[0] + tb.width / 2 - w / 2
+                val tw = IntArray(2)
+                tb.getLocationInWindow(tw)
+                x = tw[0] + tb.width / 2 - w / 2
             }
-            x = x.coerceIn(dp(8), (dm.widthPixels - w - dp(8)).coerceAtLeast(dp(8)))
-            val y = (rl[1] - h - dp(6)).coerceAtLeast(0)
+            x = x.coerceIn(dp(8), (r.width - w - dp(8)).coerceAtLeast(dp(8)))
+            val y = rw[1] - h - dp(6)
             val pw = PopupWindow(toolsBox, w, h, false)
             pw.isClippingEnabled = false     // cho phép nằm ngoài khung bàn phím
             pw.isTouchable = true
@@ -793,7 +804,25 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
             pw.animationStyle = 0
             pw.showAtLocation(r, Gravity.START or Gravity.TOP, x, y)
             toolsPopup = pw
+            toolsBox.postDelayed({ verifyToolsPanel() }, 160L)   // chờ cửa sổ nổi dựng xong rồi mới kiểm tra
         } catch (_: Throwable) {
+            toolsPopupFailed = true
+            showToolsInline()
+        }
+    }
+
+    /** Kiểm tra bảng nổi có thật sự hiện trong màn hình; nếu không (một số máy) thì chuyển sang phương án dự phòng. */
+    private fun verifyToolsPanel() {
+        if (!flyoutOpen || toolsInline || toolsPopup == null) return
+        val loc = IntArray(2)
+        toolsBox.getLocationOnScreen(loc)
+        val dm = resources.displayMetrics
+        val bad = !toolsBox.isAttachedToWindow || toolsBox.width == 0 || loc[1] < 0 ||
+            loc[1] + toolsBox.height > dm.heightPixels || loc[0] + toolsBox.width <= 0 || loc[0] >= dm.widthPixels
+        if (bad) {
+            toolsPopupFailed = true
+            try { toolsPopup?.dismiss() } catch (_: Throwable) { }
+            toolsPopup = null
             showToolsInline()
         }
     }
@@ -971,14 +1000,34 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         windowVisible = true
         registry.currentState = Lifecycle.State.RESUMED
         lastSeen.clear()
-        val themeChanged = loadTheme()
-        if (root != null && (themeChanged || prefs.scanLayoutJson != layoutSig)) rebuildScanButtons()
-        if (root != null && themeChanged) { buildTypePanel(); applyKbTheme(); applyScanTheme() }
-        refreshCredit()
+        syncFromSettings()
         if (prefs.keySound) sounds()
         ingestClipboard(true) // lấy nội dung đã sao chép trong lúc bàn phím chưa chạy
         applyScreenFlags(true)
         if (mode == 0 && prefs.autoStart && !scanning && root != null) startCamera()
+    }
+
+    /**
+     * Nạp lại giao diện, bố cục nút và kiểu dòng "Created by" nếu người dùng vừa đổi trong màn hình tùy chỉnh.
+     * Gọi khi bàn phím hiện ra và cả khi cài đặt thay đổi lúc bàn phím đang hiện (xem [prefListener]).
+     */
+    private fun syncFromSettings() {
+        val themeChanged = loadTheme()
+        if (root == null) return
+        if (themeChanged || prefs.scanLayoutJson != layoutSig) {
+            if (flyoutOpen) { flyoutOpen = false; toolsMode = 0; toolsBox.animate().cancel(); hideToolsPanel() }
+            rebuildScanButtons()
+        }
+        if (themeChanged) { buildTypePanel(); applyKbTheme(); applyScanTheme() }
+        refreshCredit()
+    }
+
+    private val syncRunnable = Runnable { try { syncFromSettings() } catch (_: Throwable) { } }
+
+    /** Giữ tham chiếu mạnh (SharedPreferences chỉ giữ tham chiếu yếu tới listener). */
+    private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+        handler.removeCallbacks(syncRunnable)
+        handler.postDelayed(syncRunnable, 200L)
     }
 
     override fun onWindowHidden() {
@@ -993,6 +1042,10 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     }
 
     override fun onDestroy() {
+        try {
+            getSharedPreferences(Prefs.NAME, MODE_PRIVATE).unregisterOnSharedPreferenceChangeListener(prefListener)
+            getSharedPreferences(ThemeStore.NAME, MODE_PRIVATE).unregisterOnSharedPreferenceChangeListener(prefListener)
+        } catch (_: Throwable) { }
         try { unregisterReceiver(screenReceiver) } catch (_: Throwable) { }
         handler.removeCallbacksAndMessages(null)
         stopCamera()

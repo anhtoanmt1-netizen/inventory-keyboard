@@ -9,6 +9,10 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.os.Bundle
+import android.text.TextWatcher
+import android.text.Editable
+import android.os.Looper
+import android.os.Handler
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
@@ -74,6 +78,7 @@ class MainActivity : Activity() {
         }
         setupDevUnlock(p)
         setupGuide()
+        setupAutoSave()
         et(R.id.etDebounce).setText(p.debounceMs.toString())
         et(R.id.etScanDelay).setText(p.scanDelayMs.toString())
         et(R.id.etVibrateMs).setText(p.vibrateMs.toString())
@@ -210,6 +215,30 @@ class MainActivity : Activity() {
     private fun sw(id: Int) = findViewById<CompoundButton>(id)
     private fun num(id: Int, def: Int, lo: Int, hi: Int) =
         (et(id).text.toString().toIntOrNull() ?: def).coerceIn(lo, hi)
+
+    // ------------------------------------------------------------------ Tự lưu cài đặt: đổi là bàn phím nhận ngay
+    private val autoSaveHandler = Handler(Looper.getMainLooper())
+    private val autoSaveRunnable = Runnable { if (ready) try { saveSettings() } catch (_: Throwable) { } }
+
+    private fun scheduleSave() {
+        autoSaveHandler.removeCallbacks(autoSaveRunnable)
+        autoSaveHandler.postDelayed(autoSaveRunnable, 500L)
+    }
+
+    /** Công tắc lưu ngay; ô số lưu sau khi ngừng gõ nửa giây. Trước đây chỉ lưu khi thoát màn hình nên bàn phím nhận chậm. */
+    private fun setupAutoSave() {
+        for (id in listOf(R.id.swEnter, R.id.swAutoStart, R.id.swBeep, R.id.swVibrate, R.id.swKeepOn, R.id.swDim)) {
+            sw(id).setOnCheckedChangeListener { _, _ -> autoSaveHandler.removeCallbacks(autoSaveRunnable); if (ready) saveSettings() }
+        }
+        val watcher = object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: Editable?) { scheduleSave() }
+        }
+        for (id in listOf(R.id.etDebounce, R.id.etScanDelay, R.id.etVibrateMs, R.id.etEnterDelay, R.id.etDimPercent, R.id.etCamHeight, R.id.etIdleOff)) {
+            et(id).addTextChangedListener(watcher)
+        }
+    }
 
     // ------------------------------------------------------------------ Hướng dẫn nhanh (hình minh họa dựng khi mở)
     private fun setupGuide() {
