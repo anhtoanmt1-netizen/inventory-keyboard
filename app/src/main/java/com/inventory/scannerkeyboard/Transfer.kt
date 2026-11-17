@@ -46,7 +46,7 @@ object Transfer {
     private const val QR_PREFIX = "SPX1"
 
     private val INT_KEYS = mapOf(
-        "debounce" to (0..60000), "scanDelay" to (0..10000), "vibrateMs" to (0..2000), "enterDelay" to (0..5000),
+        "debounce" to (300..10000), "scanDelay" to (0..5000), "vibrateMs" to (0..2000), "enterDelay" to (0..1000),
         "dimPercent" to (5..100), "camHeight" to (120..420), "idleOff" to (0..3600), "keyRowDp" to (20..120),
         "keySoundType" to (0..20), "keySoundVol" to (0..100), "keyHapticStrength" to (1..100), "clipHeightDp" to (100..600)
     )

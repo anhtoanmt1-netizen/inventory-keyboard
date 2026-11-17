@@ -19,6 +19,13 @@ và toàn bộ giá trị độ nhạy đều giữ nguyên từng dòng. Các f
 - Phiên bản 2.0 (versionCode 2). Thêm thư viện `com.google.zxing:core:3.5.3` (chỉ để tạo mã QR).
 - Cài đặt bố cục nút cũ vẫn đọc được: kích thước, căn lề và ảnh nút riêng được giữ; nút mới nằm đúng vị trí mặc định.
 
+## Đợt bổ sung (bản 2.1)
+1. **Nhóm Công cụ nổi phía trên bàn phím**: mở thành bảng nổi (cửa sổ riêng) ngay trên bàn phím, canh giữa theo nút Công cụ; không nằm trong layout nên không làm bàn phím cao thêm; một hàng gọn, tự thu lại sau khi dùng. Nếu máy không cho cửa sổ nổi thì tự chuyển sang hiện ngay dưới hàng trên (phương án dự phòng).
+2. **Bo góc nút Scan**: thanh "Bo góc nút" (0 - 30 dp, hoặc "theo giao diện") trong Tùy chỉnh nút Scan, áp dụng đồng bộ cho hàng trên, hàng dưới và nhóm Công cụ; xem trước dùng đúng giao diện thật.
+3. **Hướng dẫn nhanh có hình minh họa**: 6 nhóm, 17 mục, mỗi mục một khung hình cố định cùng kích thước; hình dựng từ chính nút / bàn phím / phím Space thật theo giao diện hiện tại, tự dựng lại khi quay về từ màn tùy chỉnh. Mở / thu gọn bằng một nút nên màn cài đặt vẫn nhẹ.
+4. **Chỉnh sửa nút**: thêm mục "CHỈNH SỬA NÚT" chọn trực tiếp từng nút ở cả ba khu vực (ô nút đúng hình thật), mỗi nút có hình ảnh riêng (THÊM / ĐỔI HÌNH ẢNH, kích thước, vị trí, thu phóng).
+5. **Danh sách chọn nút**: thiết kế lại cho danh sách "thêm vào Công cụ", danh sách nút đang có trong Công cụ (và hai hàng còn lại), hộp thoại chuyển khu vực: mỗi nút có hình thật, tên, mô tả, vị trí hiện tại, cùng phong cách thẻ của ứng dụng.
+
 ## Lưu ý
 - Hàng trên có thêm nút Clipboard (danh sách yêu cầu không nhắc, nhưng bỏ đi sẽ mất chức năng hiện có).
 - Phiên bản này chưa được biên dịch hay chạy thử trong môi trường soạn thảo (không có Android SDK). Hãy build bằng GitHub Actions và thử các mục ở trên.

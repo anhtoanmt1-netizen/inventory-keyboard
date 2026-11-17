@@ -5,6 +5,7 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
@@ -46,6 +47,8 @@ class ButtonLayoutActivity : Activity() {
     private lateinit var previewHost: LinearLayout
     private val areaBoxes = arrayOfNulls<LinearLayout>(3)
     private lateinit var editorBox: LinearLayout
+    private lateinit var pickerBox: LinearLayout
+    private lateinit var baseStyle: PanelStyle   // kiểu nút Scan của giao diện đang dùng (để xem trước đúng giao diện thật)
     private lateinit var tvDirty: TextView
     private val d by lazy { resources.displayMetrics.density }
     private fun dp(v: Int) = (v * d).toInt()
@@ -56,6 +59,7 @@ class ButtonLayoutActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
+        baseStyle = ThemeStore.load(this).current()?.scan ?: PanelStyle()
         saved = ScanLayout.fromJson(prefs.scanLayoutJson)
         cfg = saved
         setContentView(buildUi())
@@ -96,6 +100,11 @@ class ButtonLayoutActivity : Activity() {
         seekRow(g, "Chiều rộng nút", 32, 96, { cfg.widthDp }, "dp") { cfg = cfg.copy(widthDp = it); changed() }
         seekRow(g, "Chiều cao nút", 32, 96, { cfg.heightDp }, "dp") { cfg = cfg.copy(heightDp = it); changed() }
         seekRow(g, "Thu phóng chung", 60, 160, { cfg.scale }, "%") { cfg = cfg.copy(scale = it); changed() }
+        seekRow(g, "Bo góc nút", -1, 30, { cfg.cornerDp }, "dp", { v -> if (v < 0) "theo giao diện" else "$v dp" }) { cfg = cfg.copy(cornerDp = it); changed() }
+        g.addView(TextView(this).apply {
+            text = "Kéo về 0 để nút vuông góc, tăng lên để bo tròn. Mức \"theo giao diện\" giữ nguyên bo góc của giao diện đang dùng. Áp dụng đồng bộ cho mọi nút ở hàng trên, hàng dưới và nhóm Công cụ."
+            textSize = 11f; setTextColor(col(R.color.muted)); setPadding(0, dp(2), 0, 0)
+        })
         seekRow(g, "Khoảng cách ngang giữa các nút", 0, 24, { cfg.gapDp }, "dp") { cfg = cfg.copy(gapDp = it); changed() }
         label(g, "Căn lề")
         chips(g, listOf("Trái", "Giữa", "Phải", "Dàn đều", "Cách đều"), { cfg.align }) { cfg = cfg.copy(align = it); changed() }
@@ -112,7 +121,7 @@ class ButtonLayoutActivity : Activity() {
         // --- Danh sách nút: ba khu vực ---
         val l = card(root, "DANH SÁCH NÚT")
         l.addView(TextView(this).apply {
-            text = "Giữ và kéo biểu tượng ≡ (hoặc dùng ▲ ▼) để đổi thứ tự trong khu vực. Bấm ⇄ để chuyển nút sang hàng trên, hàng dưới hoặc nhóm Công cụ. Chạm một nút để chỉnh hình ảnh và thu phóng riêng."
+            text = "Giữ và kéo biểu tượng ≡ (hoặc dùng ▲ ▼) để đổi thứ tự trong khu vực. Bấm ⇄ để chuyển nút sang hàng trên, hàng dưới hoặc nhóm Công cụ."
             textSize = 12f; setTextColor(col(R.color.muted)); setPadding(0, dp(4), 0, dp(4))
         })
         val titles = listOf("HÀNG TRÊN (hiện ở mọi chế độ)", "HÀNG DƯỚI (bảng Scan, dưới khung camera)", "NHÓM CÔNG CỤ (mở khi bấm nút Công cụ)")
@@ -129,8 +138,17 @@ class ButtonLayoutActivity : Activity() {
                     LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)).apply { topMargin = dp(8) })
             }
         }
+
+        // --- Chỉnh sửa nút: chọn trực tiếp từng nút ở cả ba khu vực, mỗi nút có hình ảnh riêng ---
+        val e = card(root, "CHỈNH SỬA NÚT")
+        e.addView(TextView(this).apply {
+            text = "Chạm một nút bên dưới để chỉnh: thêm hình ảnh riêng, kích thước ảnh, vị trí ảnh và thu phóng. Mỗi nút có hình ảnh riêng, không dùng chung."
+            textSize = 12f; setTextColor(col(R.color.muted)); setPadding(0, dp(4), 0, dp(4))
+        })
+        pickerBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        e.addView(pickerBox)
         editorBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        l.addView(editorBox)
+        e.addView(editorBox)
 
         // --- Hành động ---
         root.addView(button("ÁP DỤNG", true) { applyLayout() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)).apply { topMargin = dp(16) })
@@ -180,9 +198,12 @@ class ButtonLayoutActivity : Activity() {
     }
 
     /** Thanh trượt có nhãn giá trị, nút − / + ở hai đầu và rung nhẹ mỗi khi giá trị thay đổi. */
-    private fun seekRow(parent: LinearLayout, title: String, min: Int, max: Int, current: () -> Int, unit: String, onChange: (Int) -> Unit) {
+    private fun seekRow(
+        parent: LinearLayout, title: String, min: Int, max: Int, current: () -> Int, unit: String,
+        fmt: ((Int) -> String)? = null, onChange: (Int) -> Unit
+    ) {
         val tv = TextView(this).apply { textSize = 14f; setTextColor(col(R.color.text)); setTypeface(null, android.graphics.Typeface.BOLD) }
-        fun show(v: Int) { tv.text = "$title: $v$unit" }
+        fun show(v: Int) { tv.text = "$title: " + (fmt?.invoke(v) ?: "$v$unit") }
         show(current())
         parent.addView(tv, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(14) })
         val sr = SeekRow(this, min, max, current()) { v -> show(v); onChange(v) }
@@ -195,8 +216,12 @@ class ButtonLayoutActivity : Activity() {
         tvDirty.visibility = if (cfg != saved) View.VISIBLE else View.GONE
     }
 
+    /** Kiểu nút dùng cho xem trước và danh sách: giao diện đang dùng, kèm bo góc người dùng đang chọn. */
+    private fun tileStyle(): PanelStyle = if (cfg.cornerDp >= 0) baseStyle.copy(cornerDp = cfg.cornerDp) else baseStyle
+
     private fun refreshAll() {
         refreshList()
+        refreshPicker()
         refreshEditor()
         changed()
     }
@@ -209,6 +234,11 @@ class ButtonLayoutActivity : Activity() {
     private fun refreshPreview() {
         previewHost.removeAllViews()
         val m = ScanButtons.makeAll(this, cfg)
+        val st = tileStyle()
+        for ((k, b) in m) ThemeRender.styleButton(
+            this, b, st, if (ScanLayout.isToggle(k)) ThemeRender.Kind.TOGGLE else ThemeRender.Kind.NORMAL,
+            ScanButtons.hasCustomImage(this, cfg, k)
+        )
         previewHost.addView(caption("HÀNG TRÊN"))
         previewHost.addView(ScanButtons.buildRows(this, cfg, m, cfg.top, cfg.perRowTop))
         previewHost.addView(caption("NHÓM CÔNG CỤ (mở ra bên dưới hàng trên)"))
@@ -238,40 +268,32 @@ class ButtonLayoutActivity : Activity() {
             if (list.isEmpty()) box.addView(TextView(this).apply {
                 text = "(chưa có nút nào)"; textSize = 12f; setTextColor(col(R.color.muted)); setPadding(dp(4), dp(8), 0, dp(4))
             })
-            list.forEachIndexed { idx, key -> box.addView(buildRow(a, idx, key, list.size), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)).apply { topMargin = dp(6) }) }
+            list.forEachIndexed { idx, key -> box.addView(buildRow(a, idx, key, list.size), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6) }) }
             Fonts.apply(box)
         }
     }
 
     private fun buildRow(area: Int, idx: Int, key: String, n: Int): View {
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            background = GradientDrawable().apply {
-                cornerRadius = dp(10).toFloat()
-                setColor(col(R.color.surface2))
-                if (key == selected) setStroke(dp(2), col(R.color.accent))
-            }
-            isClickable = true
-            setOnClickListener { selected = key; refreshList(); refreshEditor() }
-        }
+        val outer = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         val handle = TextView(this).apply {
             text = "≡"; textSize = 24f; gravity = Gravity.CENTER; setTextColor(col(R.color.muted))
         }
-        row.addView(handle, LinearLayout.LayoutParams(dp(44), dp(52)))
-        row.addView(ImageView(this).apply {
-            setImageResource(ScanLayout.ICONS[key] ?: R.drawable.ic_tune)
-            imageTintList = ContextCompat.getColorStateList(this@ButtonLayoutActivity, R.color.icon_tint)
-        }, LinearLayout.LayoutParams(dp(26), dp(26)))
-        row.addView(TextView(this).apply {
-            text = (ScanLayout.LABELS[key] ?: key) + if (cfg.cfg(key).image != null) "  (ảnh riêng)" else ""
-            textSize = 14f; setTextColor(col(R.color.text)); setPadding(dp(10), 0, 0, 0)
-        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        row.addView(arrow("▲", idx > 0) { move(area, idx, idx - 1) }, LinearLayout.LayoutParams(dp(34), dp(40)))
-        row.addView(arrow("▼", idx < n - 1) { move(area, idx, idx + 1) }, LinearLayout.LayoutParams(dp(34), dp(40)))
-        row.addView(arrow("⇄", true) { showMoveMenu(key) }, LinearLayout.LayoutParams(dp(40), dp(40)))
-        areaRows[area].add(row)
+        outer.addView(handle, LinearLayout.LayoutParams(dp(34), dp(60)))
+        val controls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        controls.addView(arrow("▲", idx > 0) { move(area, idx, idx - 1) }, LinearLayout.LayoutParams(dp(30), dp(40)))
+        controls.addView(arrow("▼", idx < n - 1) { move(area, idx, idx + 1) }, LinearLayout.LayoutParams(dp(30), dp(40)))
+        controls.addView(arrow("⇄", true) { showMoveMenu(key) }, LinearLayout.LayoutParams(dp(34), dp(40)))
+        val card = ButtonPicker.richRow(this, cfg, key, tileStyle(), null, null)
+        card.addView(controls, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        if (key == selected) card.background = GradientDrawable().apply {
+            cornerRadius = dp(12).toFloat(); setColor(col(R.color.surface2)); setStroke(dp(2), col(R.color.accent))
+        }
+        card.isClickable = true
+        card.setOnClickListener { selected = key; refreshList(); refreshPicker(); refreshEditor() }
+        outer.addView(card, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        areaRows[area].add(outer)
         attachDrag(handle, area, idx)
-        return row
+        return outer
     }
 
     private fun arrow(t: String, enabled: Boolean, click: () -> Unit) = TextView(this).apply {
@@ -291,36 +313,63 @@ class ButtonLayoutActivity : Activity() {
 
     /** Chuyển một nút sang khu vực khác. Nút Công cụ không thể nằm trong chính nhóm Công cụ. */
     private fun showMoveMenu(key: String) {
-        val cur = cfg.areaOf(key)
-        val targets = (0..2).filter { it != cur && !(it == ScanLayout.AREA_TOOLS && key == "tools") }
-        if (targets.isEmpty()) return
-        AlertDialog.Builder(this)
-            .setTitle("Chuyển \"${ScanLayout.LABELS[key]}\" tới")
-            .setItems(targets.map { areaNames[it] }.toTypedArray()) { _, which ->
-                cfg = cfg.moved(key, targets[which])
-                selected = key
-                refreshAll()
-            }
-            .setNegativeButton("Hủy", null)
-            .show()
+        ButtonPicker.showMoveTo(this, key, cfg, tileStyle()) { area ->
+            cfg = cfg.moved(key, area)
+            selected = key
+            refreshAll()
+        }
     }
 
-    /** Chọn một nút đang ở hàng trên / dưới để thêm vào nhóm Công cụ. */
+    /** Danh sách trực quan các nút có thể thêm vào nhóm Công cụ. */
     private fun showAddToTools() {
-        val cand = ScanLayout.KEYS.filter { it != "tools" && cfg.areaOf(it) != ScanLayout.AREA_TOOLS }
-        if (cand.isEmpty()) {
-            Toast.makeText(this, "Tất cả nút đã nằm trong nhóm Công cụ.", Toast.LENGTH_SHORT).show()
-            return
+        ButtonPicker.showAddToTools(this, cfg, tileStyle()) { k ->
+            cfg = cfg.moved(k, ScanLayout.AREA_TOOLS)
+            selected = k
+            refreshAll()
         }
-        AlertDialog.Builder(this)
-            .setTitle("Thêm vào nhóm Công cụ")
-            .setItems(cand.map { (ScanLayout.LABELS[it] ?: it) + "  (đang ở " + areaNames[cfg.areaOf(it)].lowercase() + ")" }.toTypedArray()) { _, which ->
-                cfg = cfg.moved(cand[which], ScanLayout.AREA_TOOLS)
-                selected = cand[which]
-                refreshAll()
+    }
+
+    /** Bảng chọn trực tiếp từng nút để chỉnh: gom theo ba khu vực, mỗi ô là đúng hình nút thật. */
+    private fun refreshPicker() {
+        if (!::pickerBox.isInitialized) return
+        pickerBox.removeAllViews()
+        val perRow = 4
+        for (area in 0..2) {
+            pickerBox.addView(TextView(this).apply {
+                text = ScanLayout.AREA_NAMES[area].uppercase() + "  (" + cfg.listFor(area).size + ")"
+                textSize = 11f; setTextColor(col(R.color.accent)); setTypeface(null, android.graphics.Typeface.BOLD); letterSpacing = 0.05f
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(12) })
+            val keys = cfg.listFor(area)
+            if (keys.isEmpty()) pickerBox.addView(TextView(this).apply {
+                text = "(chưa có nút nào)"; textSize = 12f; setTextColor(col(R.color.muted)); setPadding(0, dp(6), 0, dp(2))
+            })
+            for (chunk in keys.chunked(perRow)) {
+                val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+                for (k in chunk) {
+                    val cell = LinearLayout(this).apply {
+                        orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
+                        setPadding(dp(2), dp(6), dp(2), dp(6))
+                        background = GradientDrawable().apply {
+                            cornerRadius = dp(12).toFloat()
+                            setColor(if (k == selected) 0x22EE4D2D else Color.TRANSPARENT)
+                            setStroke(dp(if (k == selected) 2 else 1), if (k == selected) col(R.color.accent) else col(R.color.stroke))
+                        }
+                        isClickable = true
+                        setOnClickListener { selected = k; refreshList(); refreshPicker(); refreshEditor() }
+                    }
+                    cell.addView(ScanButtons.tile(this, cfg, k, 42, tileStyle()), LinearLayout.LayoutParams(dp(42), dp(42)))
+                    cell.addView(TextView(this).apply {
+                        text = ScanLayout.LABELS[k] ?: k
+                        textSize = 10f; gravity = Gravity.CENTER; maxLines = 2
+                        setTextColor(col(if (k == selected) R.color.text else R.color.muted))
+                    }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(4) })
+                    row.addView(cell, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { setMargins(dp(3), dp(3), dp(3), dp(3)) })
+                }
+                repeat(perRow - chunk.size) { row.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f).apply { setMargins(dp(3), 0, dp(3), 0) }) }
+                pickerBox.addView(row)
             }
-            .setNegativeButton("Hủy", null)
-            .show()
+        }
+        Fonts.apply(pickerBox)
     }
 
     /** Kéo thả trong một khu vực: hàng đang kéo đi theo ngón tay, các hàng khác nhường chỗ; thả tay thì chốt vị trí mới. */
@@ -374,12 +423,21 @@ class ButtonLayoutActivity : Activity() {
             background = GradientDrawable().apply { cornerRadius = dp(10).toFloat(); setColor(col(R.color.surface)); setStroke(dp(1), col(R.color.stroke)) }
         }
         editorBox.addView(box, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })
+        val moveBtn = button("CHUYỂN", false) { showMoveMenu(key) }
+        moveBtn.textSize = 11f
+        box.addView(
+            ButtonPicker.richRow(this, cfg, key, tileStyle(), "Đang ở: " + ScanLayout.AREA_NAMES[cfg.areaOf(key)], moveBtn),
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        )
+        label(box, "Hình ảnh riêng cho nút này")
         box.addView(TextView(this).apply {
-            text = "Chỉnh nút: ${ScanLayout.LABELS[key] ?: key}"; textSize = 14f; setTextColor(col(R.color.accent)); setTypeface(null, android.graphics.Typeface.BOLD)
+            text = if (c.image != null) "Nút đang dùng hình ảnh riêng. Bạn có thể đổi hoặc bỏ để quay về biểu tượng mặc định."
+            else "Chưa có hình ảnh riêng: nút đang dùng biểu tượng mặc định. Thêm ảnh PNG (nên nền trong suốt) để thay."
+            textSize = 11f; setTextColor(col(R.color.muted)); setPadding(0, dp(2), 0, 0)
         })
 
         val btns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        btns.addView(button("CHỌN ẢNH PNG", true) { pickImage(key) }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { setMargins(0, 0, dp(4), 0) })
+        btns.addView(button(if (c.image != null) "ĐỔI HÌNH ẢNH" else "THÊM HÌNH ẢNH", true) { pickImage(key) }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { setMargins(0, 0, dp(4), 0) })
         if (c.image != null) btns.addView(button("BỎ ẢNH", false) {
             cfg = cfg.withButton(key, c.copy(image = null, imgW = 0, imgH = 0)); refreshAll()
         }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { setMargins(dp(4), 0, 0, 0) })

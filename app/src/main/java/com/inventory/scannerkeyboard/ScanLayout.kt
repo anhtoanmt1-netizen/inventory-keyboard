@@ -45,7 +45,8 @@ data class ScanLayout(
     val gapDp: Int = 6,           // khoảng cách ngang giữa các nút (dp), dùng khi căn Trái/Giữa/Phải
     val align: Int = ALIGN_CENTER,
     val grid: Boolean = true,     // true: căn theo cột (lưới), false: mỗi hàng tự căn riêng
-    val buttons: Map<String, BtnCfg> = emptyMap()
+    val buttons: Map<String, BtnCfg> = emptyMap(),
+    val cornerDp: Int = -1        // bo góc các nút (dp, 0..30); -1 = theo giao diện đang dùng
 ) {
     companion object {
         const val ALIGN_LEFT = 0
@@ -88,9 +89,31 @@ data class ScanLayout(
             "autoEnter" to R.drawable.ic_enter_auto, "sound" to R.drawable.ic_volume, "soundPick" to R.drawable.ic_music
         )
 
+        /** Mô tả ngắn một dòng cho từng nút (dùng trong danh sách chọn nút và hướng dẫn). */
+        val DESCS = mapOf(
+            "tools" to "Mở bảng công cụ nổi phía trên bàn phím.",
+            "scan" to "Chuyển sang chế độ quét mã bằng camera.",
+            "type" to "Chuyển sang bàn phím gõ chữ, số, ký hiệu.",
+            "clip" to "Mở lịch sử Clipboard: dán lại chữ và ảnh đã chép.",
+            "settings" to "Mở bảng cài đặt của ứng dụng.",
+            "switch" to "Đổi sang bàn phím khác (dùng chung mọi bảng).",
+            "hide" to "Thu gọn, ẩn bàn phím.",
+            "cam" to "Bật / tắt camera quét mã.",
+            "flash" to "Bật / tắt đèn pin khi quét nơi thiếu sáng.",
+            "keepOn" to "Giữ màn hình luôn sáng khi dùng bàn phím.",
+            "dim" to "Hạ độ sáng màn hình để đỡ chói.",
+            "del" to "Xóa ký tự; giữ để xóa nhanh dần.",
+            "enter" to "Gửi phím Enter vào ô đang nhập.",
+            "autoEnter" to "Tự gửi Enter sau mỗi mã quét được.",
+            "sound" to "Bật / tắt âm thanh khi gõ phím.",
+            "soundPick" to "Chọn nhanh kiểu âm thanh gõ phím (1 - 8)."
+        )
+
+        val AREA_NAMES = listOf("Hàng trên", "Hàng dưới (bảng Scan)", "Nhóm Công cụ")
+
         /** Hướng dẫn hiện ra khi giữ lâu một nút. */
         val HINTS = mapOf(
-            "tools" to "CÔNG CỤ: mở nhóm công cụ (tự Enter, âm thanh phím, chọn nhanh âm thanh...). Chạm lại để thu gọn.",
+            "tools" to "CÔNG CỤ: mở bảng công cụ nổi phía trên bàn phím (tự Enter, âm thanh phím, chọn nhanh âm thanh...). Chạm lại để thu gọn.",
             "scan" to "QUÉT: dùng camera quét mã QR / mã vạch, mã tự nhập vào ô đang chọn.",
             "type" to "GÕ PHÍM: bàn phím đầy đủ để gõ chữ, số, ký hiệu. Camera tự tắt để tiết kiệm pin.",
             "clip" to "CLIPBOARD: xem lại văn bản và hình ảnh đã sao chép, chạm để dán, ghim mục quan trọng.",
@@ -154,7 +177,8 @@ data class ScanLayout(
                     o.optInt("w", d.widthDp).coerceIn(32, 96),
                     o.optInt("h", d.heightDp).coerceIn(32, 96), o.optInt("scale", d.scale).coerceIn(60, 160),
                     o.optInt("gap", d.gapDp).coerceIn(0, 24), o.optInt("align", d.align).coerceIn(0, 4),
-                    o.optBoolean("grid", d.grid), btns
+                    o.optBoolean("grid", d.grid), btns,
+                    o.optInt("corner", d.cornerDp).coerceIn(-1, 30)
                 )
             } catch (_: Throwable) { ScanLayout() }
         }
@@ -197,7 +221,7 @@ data class ScanLayout(
         return JSONObject().put("ver", 2)
             .put("top", JSONArray(top)).put("bottom", JSONArray(bottom)).put("tools", JSONArray(tools))
             .put("pTop", perRowTop).put("pBot", perRowBottom).put("w", widthDp).put("h", heightDp)
-            .put("scale", scale).put("gap", gapDp).put("align", align).put("grid", grid).put("buttons", b).toString()
+            .put("scale", scale).put("gap", gapDp).put("align", align).put("grid", grid).put("corner", cornerDp).put("buttons", b).toString()
     }
 
     /** Tên các file ảnh đang được dùng. */
@@ -348,6 +372,26 @@ object ScanButtons {
             })
         }
         return strip
+    }
+
+    /** Kiểu nút Scan đang dùng: theo giao diện đang chọn, riêng bo góc lấy theo bố cục nếu người dùng đã đặt. */
+    fun styleFor(ctx: Context, lay: ScanLayout): PanelStyle {
+        val base = ThemeStore.load(ctx).current()?.scan ?: PanelStyle()
+        return if (lay.cornerDp >= 0) base.copy(cornerDp = lay.cornerDp) else base
+    }
+
+    /**
+     * Một nút cỡ chuẩn [sizeDp] đã áp đúng giao diện thật (nền, bo góc, màu biểu tượng, ảnh riêng nếu có).
+     * Dùng cho danh sách chọn nút, khung chỉnh nút và hình minh họa hướng dẫn: nhìn giống hệt nút trên bàn phím.
+     */
+    fun tile(ctx: Context, lay: ScanLayout, key: String, sizeDp: Int, st: PanelStyle): ImageView {
+        val t = lay.copy(
+            widthDp = sizeDp, heightDp = sizeDp, scale = 100, perRowTop = 1, perRowBottom = 1,
+            buttons = lay.buttons.mapValues { (_, c) -> c.copy(scale = 100, imgW = 0, imgH = 0) }
+        )
+        val iv = makeButton(ctx, t, key)
+        ThemeRender.styleButton(ctx, iv, st, if (ScanLayout.isToggle(key)) ThemeRender.Kind.TOGGLE else ThemeRender.Kind.NORMAL, hasCustomImage(ctx, t, key))
+        return iv
     }
 
     fun makeAll(ctx: Context, lay: ScanLayout): Map<String, ImageView> =

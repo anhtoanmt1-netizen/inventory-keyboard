@@ -73,6 +73,7 @@ class MainActivity : Activity() {
             startActivity(Intent(this, TransferActivity::class.java))
         }
         setupDevUnlock(p)
+        setupGuide()
         et(R.id.etDebounce).setText(p.debounceMs.toString())
         et(R.id.etScanDelay).setText(p.scanDelayMs.toString())
         et(R.id.etVibrateMs).setText(p.vibrateMs.toString())
@@ -210,8 +211,33 @@ class MainActivity : Activity() {
     private fun num(id: Int, def: Int, lo: Int, hi: Int) =
         (et(id).text.toString().toIntOrNull() ?: def).coerceIn(lo, hi)
 
+    // ------------------------------------------------------------------ Hướng dẫn nhanh (hình minh họa dựng khi mở)
+    private fun setupGuide() {
+        val btn = findViewById<TextView>(R.id.btnGuide)
+        val host = findViewById<LinearLayout>(R.id.guideHost)
+        btn.setOnClickListener {
+            if (host.visibility == View.VISIBLE) {
+                host.visibility = View.GONE
+                btn.text = "XEM HƯỚNG DẪN CÓ HÌNH MINH HỌA"
+            } else {
+                if (host.childCount == 0) GuidePanel.build(this, host)
+                host.visibility = View.VISIBLE
+                btn.text = "THU GỌN HƯỚNG DẪN"
+            }
+        }
+    }
+
+    /** Quay lại từ màn tùy chỉnh: dựng lại hình minh họa để luôn khớp giao diện và bố cục mới. */
+    private fun refreshGuide() {
+        val host = findViewById<LinearLayout>(R.id.guideHost) ?: return
+        if (host.childCount == 0) return
+        host.removeAllViews()
+        if (host.visibility == View.VISIBLE) GuidePanel.build(this, host)
+    }
+
     override fun onResume() {
         super.onResume()
+        try { refreshGuide() } catch (_: Throwable) { }
         if (ready) {
             try { refreshState() } catch (e: Throwable) {
                 showText("LỖI KHI CẬP NHẬT TRẠNG THÁI", Log.getStackTraceString(e), clearable = false)

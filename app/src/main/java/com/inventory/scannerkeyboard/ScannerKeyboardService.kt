@@ -29,6 +29,8 @@ import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
 import android.view.inputmethod.InputMethodManager
 import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
+import android.widget.PopupWindow
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import androidx.core.view.inputmethod.EditorInfoCompat
@@ -80,8 +82,11 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     private lateinit var panelType: LinearLayout
     private lateinit var btnArea: LinearLayout       // hàng nút dưới (bảng Scan)
     private lateinit var topArea: LinearLayout       // hàng nút trên (hiện ở mọi chế độ)
-    private lateinit var toolsBox: FrameLayout       // nhóm Công cụ (mở ra bên dưới hàng trên)
+    private lateinit var toolsBox: FrameLayout       // nhóm Công cụ: bảng nổi phía trên bàn phím (PopupWindow)
     private lateinit var toolsRow: LinearLayout
+    private var toolsPopup: PopupWindow? = null
+    private var toolsInline = false                  // phương án dự phòng: hiện ngay trong bàn phím nếu máy không cho cửa sổ nổi
+    private var btnCorner = -1                       // bo góc nút Scan (dp) do người dùng chọn; -1 = theo giao diện
     private lateinit var creditView: CreditView
     private var creditRaw = "\u0000"
     private var btnMap: Map<String, ImageView> = emptyMap()
@@ -482,8 +487,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         panelType = v.findViewById(R.id.panelType)
         btnArea = v.findViewById(R.id.btnArea)
         topArea = v.findViewById(R.id.topArea)
-        toolsBox = v.findViewById(R.id.toolsBox)
-        toolsRow = v.findViewById(R.id.toolsRow)
+        buildToolsBox()
         creditView = v.findViewById(R.id.creditView)
 
         cameraBox.layoutParams.height = dp(prefs.cameraHeightDp.coerceIn(120, 420))
@@ -529,13 +533,14 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         val json = prefs.scanLayoutJson
         val lay = ScanLayout.fromJson(json)
         ScanButtons.forgetBitmaps()
+        btnCorner = lay.cornerDp
         val m = ScanButtons.makeAll(this, lay)
         val custom = HashSet<String>()
         for ((k, b) in m) {
             val hasImg = ScanButtons.hasCustomImage(this, lay, k)
             if (hasImg) custom.add(k)
             ThemeRender.styleButton(
-                this, b, styleScan,
+                this, b, btnStyle(),
                 if (ScanLayout.isToggle(k)) ThemeRender.Kind.TOGGLE else ThemeRender.Kind.NORMAL,
                 hasImg
             )
@@ -550,10 +555,14 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         topViews = lay.top.mapNotNull { m[it] }
         scanButtonViews = lay.bottom.mapNotNull { m[it] }
         toolViews = lay.tools.mapNotNull { m[it] }
+        fxScan?.style = btnStyle(); fxTop?.style = btnStyle(); fxTools?.style = btnStyle()
         renderTools()
         layoutSig = json
         updateUi()
     }
+
+    /** Kiểu của các nút Scan: theo giao diện, riêng bo góc có thể do người dùng chọn trong Tùy chỉnh nút Scan. */
+    private fun btnStyle(): PanelStyle = if (btnCorner >= 0) styleScan.copy(cornerDp = btnCorner) else styleScan
 
     /** Nút đang nằm trong nhóm Công cụ: dùng xong thì nhóm tự thu lại. */
     private fun afterToolUse(key: String) {
@@ -626,7 +635,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     }
 
     private fun openSoundPicker() {
-        if (flyoutOpen) { toolsMode = 1; renderTools() } else openFlyout(1)
+        if (flyoutOpen) { toolsMode = 1; refreshToolsPanel() } else openFlyout(1)
     }
 
     /** Dải chọn nhanh âm thanh: nút quay lại và 8 kiểu âm thanh đánh số, chạm để chọn và nghe thử ngay. */
@@ -643,7 +652,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
             setOnClickListener { click() }
         }
         val lp = { LinearLayout.LayoutParams(dp(40), dp(40)).apply { setMargins(dp(3), 0, dp(3), 0) } }
-        toolsRow.addView(chip("‹", false) { toolsMode = 0; renderTools() }, lp())
+        toolsRow.addView(chip("‹", false) { toolsMode = 0; refreshToolsPanel() }, lp())
         for (i in KeySound.NAMES.indices) {
             toolsRow.addView(chip("${i + 1}", prefs.keySoundType == i && prefs.keySound) {
                 prefs.keySound = true
@@ -651,7 +660,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
                 keyClick()
                 say("Âm thanh phím: ${KeySound.NAMES[i]}")
                 updateUi()
-                renderTools()
+                refreshToolsPanel()
             }, lp())
         }
     }
@@ -733,18 +742,96 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     // ----- Danh sách công cụ mở / thu có hoạt ảnh -----
     private fun toggleFlyout() { if (flyoutOpen) closeFlyout() else openFlyout() }
 
+    /** Dựng khung nhóm Công cụ bằng code (nổi phía trên bàn phím nên không nằm trong layout XML). */
+    private fun buildToolsBox() {
+        toolsBox = FrameLayout(this).apply {
+            setBackgroundResource(R.drawable.bg_flyout)
+            setPadding(dp(6), dp(6), dp(6), dp(6))
+        }
+        val sc = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+        }
+        toolsRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        sc.addView(toolsRow, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        toolsBox.addView(sc, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+    }
+
+    /**
+     * Hiện nhóm Công cụ nổi ngay phía trên bàn phím, canh giữa theo nút Công cụ. Bảng nằm ngoài khung bàn phím
+     * (cửa sổ nổi) nên không làm tăng chiều cao mặc định của bàn phím; nhỏ gọn một hàng để ít che nội dung nhập.
+     */
+    private fun showToolsPanel() {
+        hideToolsPanel()
+        val dm = resources.displayMetrics
+        toolsBox.measure(
+            View.MeasureSpec.makeMeasureSpec(dm.widthPixels - dp(16), View.MeasureSpec.AT_MOST),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        )
+        val w = toolsBox.measuredWidth
+        val h = toolsBox.measuredHeight
+        toolsBox.pivotX = w / 2f
+        toolsBox.pivotY = h.toFloat()
+        try {
+            val r = root ?: throw IllegalStateException("no root")
+            val rl = IntArray(2)
+            r.getLocationOnScreen(rl)
+            var x = dp(8)
+            val tb = btnMap["tools"]
+            if (tb != null && tb.isAttachedToWindow) {
+                val tl = IntArray(2)
+                tb.getLocationOnScreen(tl)
+                x = tl[0] + tb.width / 2 - w / 2
+            }
+            x = x.coerceIn(dp(8), (dm.widthPixels - w - dp(8)).coerceAtLeast(dp(8)))
+            val y = (rl[1] - h - dp(6)).coerceAtLeast(0)
+            val pw = PopupWindow(toolsBox, w, h, false)
+            pw.isClippingEnabled = false     // cho phép nằm ngoài khung bàn phím
+            pw.isTouchable = true
+            pw.isFocusable = false           // không cướp tiêu điểm nhập liệu
+            pw.isOutsideTouchable = false
+            pw.animationStyle = 0
+            pw.showAtLocation(r, Gravity.START or Gravity.TOP, x, y)
+            toolsPopup = pw
+        } catch (_: Throwable) {
+            showToolsInline()
+        }
+    }
+
+    /** Phương án dự phòng khi máy không cho phép cửa sổ nổi: chèn ngay dưới hàng trên. */
+    private fun showToolsInline() {
+        val r = root as? ViewGroup ?: return
+        (toolsBox.parent as? ViewGroup)?.removeView(toolsBox)
+        val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            setMargins(dp(8), dp(2), dp(8), dp(4)); gravity = Gravity.START
+        }
+        r.addView(toolsBox, (r.indexOfChild(topArea) + 1).coerceAtLeast(0), lp)
+        toolsInline = true
+    }
+
+    private fun hideToolsPanel() {
+        try { toolsPopup?.dismiss() } catch (_: Throwable) { }
+        toolsPopup = null
+        toolsInline = false
+        (toolsBox.parent as? ViewGroup)?.removeView(toolsBox)
+    }
+
+    /** Vẽ lại nội dung bảng Công cụ đang mở (đổi sang dải chọn âm thanh và ngược lại) rồi canh lại kích thước. */
+    private fun refreshToolsPanel() {
+        renderTools()
+        if (flyoutOpen) showToolsPanel()
+    }
+
     private fun openFlyout(startMode: Int = 0) {
         toolsMode = startMode
         flyoutOpen = true
         renderTools()
+        showToolsPanel()
         toolsBox.animate().cancel()
-        toolsBox.visibility = View.VISIBLE
-        toolsBox.pivotX = 0f
-        toolsBox.pivotY = 0f
         toolsBox.alpha = 0f
-        toolsBox.translationY = -dp(10).toFloat()
-        toolsBox.scaleX = 0.9f
-        toolsBox.scaleY = 0.9f
+        toolsBox.translationY = dp(8).toFloat()      // trồi lên từ phía nút Công cụ
+        toolsBox.scaleX = 0.92f
+        toolsBox.scaleY = 0.92f
         toolsBox.animate().alpha(1f).translationY(0f).scaleX(1f).scaleY(1f)
             .setDuration(190).setInterpolator(DecelerateInterpolator()).start()
         for (i in 0 until toolsRow.childCount) {
@@ -759,8 +846,8 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         if (!flyoutOpen) return
         flyoutOpen = false
         toolsBox.animate().cancel()
-        toolsBox.animate().alpha(0f).translationY(-dp(8).toFloat()).scaleX(0.92f).scaleY(0.92f)
-            .setDuration(150).withEndAction { if (!flyoutOpen) { toolsBox.visibility = View.GONE; toolsMode = 0 } }.start()
+        toolsBox.animate().alpha(0f).translationY(dp(6).toFloat()).scaleX(0.94f).scaleY(0.94f)
+            .setDuration(140).withEndAction { if (!flyoutOpen) { hideToolsPanel(); toolsMode = 0 } }.start()
         updateUi()
     }
 
@@ -898,7 +985,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         super.onWindowHidden()
         windowVisible = false
         telex.reset()
-        if (::toolsBox.isInitialized) { flyoutOpen = false; toolsMode = 0; toolsBox.animate().cancel(); toolsBox.visibility = View.GONE }
+        if (::toolsBox.isInitialized) { flyoutOpen = false; toolsMode = 0; toolsBox.animate().cancel(); hideToolsPanel() }
         clipViewer?.dismiss()
         stopCamera()
         applyScreenFlags(false)
@@ -917,6 +1004,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         try { clipMgr?.removePrimaryClipChangedListener(clipListener) } catch (_: Throwable) { }
         clipPanel?.release()
         clipViewer?.dismiss()
+        if (::toolsBox.isInitialized) hideToolsPanel()
         ioExec.shutdown()
         super.onDestroy()
     }
@@ -1093,9 +1181,9 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
 
     /** Nền của bảng Scan + font của dòng trạng thái / gợi ý (bảng Scan không có chữ nào khác). */
     private fun applyScanTheme() {
-        fxScan?.style = styleScan
-        fxTop?.style = styleScan
-        fxTools?.style = styleScan
+        fxScan?.style = btnStyle()
+        fxTop?.style = btnStyle()
+        fxTools?.style = btnStyle()
         applyLayoutTo(panelScan, styleScan)
         panelScan.background = ThemeRender.panelBackground(this, styleScan)
         if (!scanTextCaptured) {

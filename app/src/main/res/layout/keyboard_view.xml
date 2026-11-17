@@ -26,34 +26,6 @@
         android:layout_height="wrap_content"
         android:orientation="vertical" />
 
-    <!-- Nhóm Công cụ: mở ra bên dưới hàng trên khi bấm nút Công cụ, dùng được ở mọi chế độ -->
-    <FrameLayout
-        android:id="@+id/toolsBox"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="start"
-        android:layout_marginStart="8dp"
-        android:layout_marginTop="2dp"
-        android:layout_marginEnd="8dp"
-        android:layout_marginBottom="4dp"
-        android:background="@drawable/bg_flyout"
-        android:padding="6dp"
-        android:visibility="gone">
-        <HorizontalScrollView
-            android:id="@+id/toolsScroll"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:overScrollMode="never"
-            android:scrollbars="none">
-            <LinearLayout
-                android:id="@+id/toolsRow"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal" />
-        </HorizontalScrollView>
-    </FrameLayout>
-
     <!-- MÀN HÌNH QUÉT -->
     <LinearLayout
         android:id="@+id/panelScan"
