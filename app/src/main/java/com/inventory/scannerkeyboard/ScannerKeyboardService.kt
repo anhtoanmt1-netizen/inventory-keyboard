@@ -1210,6 +1210,23 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         KbLook.styleScanPanel(this, panelScan, tvStatus, tvHint, styleScan, fullWidthPx(), statusColor0, hintColor0)
     }
 
+    /** Thao tác thật của từng loại phím trên bảng Gõ phím (bản xem trước không có phần này). */
+    private val keyBinder = object : KeyBinder {
+        override fun onChar(v: View, c: Char, letter: Boolean) { v.setOnClickListener { typeChar(c, letter) }; pressEffect(v, true) }
+        override fun onLayer(v: View, target: Int) { v.setOnClickListener { layer = target; buildTypePanel() }; pressEffect(v, true) }
+        override fun onShift(v: View) { v.setOnClickListener { toggleShift() }; pressEffect(v, true) }
+        override fun onVn(v: View) { v.setOnClickListener { finishComposing(); vn = !vn; buildTypePanel() }; pressEffect(v, true) }
+        override fun onSymbol(v: View, s: String) { v.setOnClickListener { type(s) }; pressEffect(v, true) }
+        override fun onEnter(v: View) {
+            v.setOnClickListener {
+                if (searchActive) endSearch() else { finishComposing(); sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER) }
+            }
+            pressEffect(v, true)
+        }
+        override fun onDelete(v: View) { bindRepeat(v, true) { handleDelete() } }
+        override fun onSpace(v: View) { bindSpace(v) }
+    }
+
     private fun buildTypePanel() {
         val b = TypePanelBuilder(this, styleKb, spaceStyle, rowHeightPx(), vn, layer, shift, keyBinder)
         b.build(panelType)
@@ -1218,6 +1235,51 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         shiftKey = b.shiftKey
         spaceView = b.spaceView
         applyKbText()
+        refreshShift()
+    }
+
+    private fun typeChar(c: Char, letter: Boolean) {
+        val ch = if (letter && shift > 0) c.uppercaseChar() else c
+        if (vn && letter && !searchActive) telexKey(ch) else type(ch.toString())
+        if (letter && shift == 1) { shift = 0; refreshShift() }
+    }
+
+    private fun telexKey(ch: Char) {
+        val ic = currentInputConnection ?: return
+        telex.push(ch)
+        ic.setComposingText(telex.text(), 1)
+        lastComposeAt = SystemClock.elapsedRealtime()
+    }
+
+    /** Chèn văn bản thường (kết thúc từ Telex đang gõ dở trước). */
+    private fun type(s: String) {
+        if (searchActive) { searchText += s; updateSearchBar(); return }
+        finishComposing()
+        currentInputConnection?.commitText(s, 1)
+    }
+
+    /** Chốt từ đang gõ dở (giữ nguyên chữ đã hiện). */
+    private fun finishComposing() {
+        if (!telex.isEmpty) {
+            telex.reset()
+            currentInputConnection?.finishComposingText()
+        }
+    }
+
+    /** Xóa: nếu đang gõ dở một từ Telex thì bỏ phím cuối của từ đó, ngược lại xóa ký tự như bình thường. */
+    private fun handleDelete() {
+        if (searchActive) { searchText = searchText.dropLast(1); updateSearchBar(); return }
+        if (!telex.isEmpty) {
+            telex.backspace()
+            currentInputConnection?.setComposingText(if (telex.isEmpty) "" else telex.text(), 1)
+            lastComposeAt = SystemClock.elapsedRealtime()
+        } else {
+            sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
+        }
+    }
+
+    private fun toggleShift() {
+        shift = when (shift) { 0 -> 1; 1 -> 2; else -> 0 }
         refreshShift()
     }
 

@@ -50,6 +50,9 @@ và toàn bộ giá trị độ nhạy đều giữ nguyên từng dòng. Các f
   Bàn phím thật cũng gọi lại cùng các hàm đó, nên không thể lệch nhau. Xem trước dựng ở bề rộng thật của màn hình rồi thu nhỏ đều.
 - Xem trước nút Scan hiển thị cả bảng Công cụ nổi (nút Công cụ sáng lên), canh theo vị trí nút Công cụ như bàn phím thật. Chạm một nút trong xem trước để chọn chỉnh nút đó.
 
+## Sửa lỗi build (2.3.1)
+- ScannerKeyboardService.kt: khi chuyển bàn phím sang mã dựng chung, mình đã xóa nhầm các hàm finishComposing, handleDelete, type, typeChar, telexKey, toggleShift và khai báo keyBinder (lỗi "Unresolved reference"). Đã khôi phục từ bản gốc và đối chiếu lại toàn bộ lời gọi hàm.
+
 ## Lưu ý
 - Hàng trên có thêm nút Clipboard (danh sách yêu cầu không nhắc, nhưng bỏ đi sẽ mất chức năng hiện có).
 - Phiên bản này chưa được biên dịch hay chạy thử trong môi trường soạn thảo (không có Android SDK). Hãy build bằng GitHub Actions và thử các mục ở trên.
