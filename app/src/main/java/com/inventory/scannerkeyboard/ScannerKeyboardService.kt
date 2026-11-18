@@ -94,6 +94,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     private var creditRaw = "\u0000"
     private var btnMap: Map<String, ImageView> = emptyMap()
     private var customKeys: Set<String> = emptySet()   // nút đang dùng ảnh PNG riêng (không đổi biểu tượng theo trạng thái)
+    private var toolKeys: List<String> = emptyList()   // nút trong nhóm Công cụ theo bố cục hiện tại
     private var toolsMode = 0                          // 0 danh sách công cụ, 1 chọn nhanh âm thanh
     private var clipViewer: ClipViewer? = null
     private var spaceStyle = SpaceStyle()
@@ -538,29 +539,20 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     private fun rebuildScanButtons() {
         val json = prefs.scanLayoutJson
         val lay = ScanLayout.fromJson(json)
-        ScanButtons.forgetBitmaps()
         btnCorner = lay.cornerDp
-        val m = ScanButtons.makeAll(this, lay)
-        val custom = HashSet<String>()
-        for ((k, b) in m) {
-            val hasImg = ScanButtons.hasCustomImage(this, lay, k)
-            if (hasImg) custom.add(k)
-            ThemeRender.styleButton(
-                this, b, btnStyle(),
-                if (ScanLayout.isToggle(k)) ThemeRender.Kind.TOGGLE else ThemeRender.Kind.NORMAL,
-                hasImg
-            )
-        }
+        val asm = ScanButtons.assemble(this, lay, btnStyle())
+        val m = asm.buttons
         btnMap = m
-        customKeys = custom
+        customKeys = asm.custom
         bindButtons(m)
         topArea.removeAllViews()
-        topArea.addView(ScanButtons.buildRows(this, lay, m, lay.top, lay.perRowTop))
+        topArea.addView(asm.top)
         btnArea.removeAllViews()
-        btnArea.addView(ScanButtons.buildRows(this, lay, m, lay.bottom, lay.perRowBottom))
-        topViews = lay.top.mapNotNull { m[it] }
-        scanButtonViews = lay.bottom.mapNotNull { m[it] }
-        toolViews = lay.tools.mapNotNull { m[it] }
+        btnArea.addView(asm.bottom)
+        topViews = asm.topViews
+        scanButtonViews = asm.bottomViews
+        toolViews = asm.toolViews
+        toolKeys = lay.tools
         // Khoảng cách giữa hàng trên - bàn phím / khung camera - hàng dưới
         topArea.setPadding(0, 0, 0, dp(lay.gapTopBelowDp))
         gapBelowCamera.layoutParams = gapBelowCamera.layoutParams.apply { height = dp(lay.gapBottomAboveDp) }
@@ -627,12 +619,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         if (!::toolsRow.isInitialized) return
         toolsRow.removeAllViews()
         if (toolsMode == 1) { renderSoundPicker(); return }
-        for (b in toolViews) {
-            (b.parent as? ViewGroup)?.removeView(b)
-            toolsRow.addView(b, LinearLayout.LayoutParams(b.layoutParams.width, b.layoutParams.height).apply {
-                setMargins(dp(3), 0, dp(3), 0)
-            })
-        }
+        ScanButtons.fillTools(this, toolsRow, btnMap, toolKeys)
         if (toolViews.isEmpty()) {
             toolsRow.addView(TextView(this).apply {
                 text = "Nhóm Công cụ đang trống. Thêm nút trong Tùy chỉnh nút Scan."
@@ -753,17 +740,9 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
 
     /** Dựng khung nhóm Công cụ bằng code (nổi phía trên bàn phím nên không nằm trong layout XML). */
     private fun buildToolsBox() {
-        toolsBox = FrameLayout(this).apply {
-            setBackgroundResource(R.drawable.bg_flyout)
-            setPadding(dp(6), dp(6), dp(6), dp(6))
-        }
-        val sc = HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-            overScrollMode = View.OVER_SCROLL_NEVER
-        }
-        toolsRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        sc.addView(toolsRow, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        toolsBox.addView(sc, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        val (box, row) = ScanButtons.newToolsBox(this)
+        toolsBox = box
+        toolsRow = row
     }
 
     /**
@@ -1184,7 +1163,6 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     // =====================================================================
     //  BÀN PHÍM GÕ (chữ / số / ký hiệu)
     // =====================================================================
-    private enum class KS { NORMAL, SPECIAL, ACCENT }
 
     /** Nạp giao diện đang dùng. Trả về true nếu khác lần trước (cần dựng lại các bảng). */
     private fun loadTheme(): Boolean {
@@ -1200,29 +1178,16 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     }
 
     /** Nền phía sau các phím + font / màu chữ của bảng Bàn phím. */
-    /** Áp bố cục (chiều rộng, căn lề, một tay, nâng đáy) của giao diện lên một bảng. */
-    private fun applyLayoutTo(panel: View, st: PanelStyle) {
-        val lp = panel.layoutParams as? LinearLayout.LayoutParams ?: return
-        val full = (root?.width ?: 0).let { if (it > 0) it else resources.displayMetrics.widthPixels }
-        ThemeRender.applyPanelLayout(lp, st, full, resources.displayMetrics.density)
-        panel.layoutParams = lp
-    }
+    private fun fullWidthPx(): Int = (root?.width ?: 0).let { if (it > 0) it else resources.displayMetrics.widthPixels }
 
     /** Chiều cao một hàng phím: giá trị người dùng kéo chỉnh, có hệ số tự tối ưu theo cỡ màn hình nếu bật. */
-    private fun autoRowScale(): Float {
-        if (!styleKb.layoutAuto) return 1f
-        val m = resources.displayMetrics
-        return (minOf(m.widthPixels, m.heightPixels) / m.density / 360f).coerceIn(0.9f, 1.15f)
-    }
+    private fun autoRowScale(): Float = KbMetrics.autoRowScale(this, styleKb)
 
-    private fun rowHeightPx(): Int =
-        dp((prefs.keyRowDp.coerceIn(KEY_ROW_MIN, KEY_ROW_MAX) * autoRowScale()).toInt())
+    private fun rowHeightPx(): Int = KbMetrics.rowHeightPx(this, prefs, styleKb)
 
     private fun applyKbTheme() {
         fxKb?.style = styleKb
-        applyLayoutTo(panelType, styleKb)
-        panelType.clipChildren = false
-        panelType.background = ThemeRender.panelBackground(this, styleKb)
+        KbLook.styleTypePanel(this, panelType, styleKb, fullWidthPx())
         applyKbText()
     }
 
@@ -1237,157 +1202,23 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         fxScan?.style = btnStyle()
         fxTop?.style = btnStyle()
         fxTools?.style = btnStyle()
-        applyLayoutTo(panelScan, styleScan)
-        panelScan.background = ThemeRender.panelBackground(this, styleScan)
         if (!scanTextCaptured) {
             statusColor0 = tvStatus.currentTextColor
             hintColor0 = tvHint.currentTextColor
             scanTextCaptured = true
         }
-        val custom = styleScan.textColor != PanelStyle().textColor
-        for ((t, c0) in listOf(tvStatus to statusColor0, tvHint to hintColor0)) {
-            Fonts.apply(t)                       // trả về font gốc trước khi áp font theo giao diện
-            t.setTextColor(c0)
-            t.setShadowLayer(0f, 0f, 0f, 0)
-            ThemeRender.styleText(t, styleScan, custom)
-        }
+        KbLook.styleScanPanel(this, panelScan, tvStatus, tvHint, styleScan, fullWidthPx(), statusColor0, hintColor0)
     }
 
     private fun buildTypePanel() {
-        panelType.removeAllViews()
-        keyViews.clear()
-        letterKeys.clear()
-        shiftKey = null
-
-        when (layer) {
-            0 -> {
-                panelType.addView(charRow("1234567890", false, false))
-                panelType.addView(charRow("qwertyuiop", true, false))
-                panelType.addView(charRow("asdfghjkl", true, true))
-                val r = newRow()
-                shiftKey = addIconKey(r, R.drawable.ic_shift, 1.5f, KS.SPECIAL) { toggleShift() }
-                "zxcvbnm".forEach { addChar(r, it, true) }
-                addRepeatKey(r, 1.5f)
-                panelType.addView(r)
-            }
-            1 -> {
-                panelType.addView(charRow("1234567890", false, false))
-                panelType.addView(charRow("@#$%&-+()/", false, false))
-                val r = newRow()
-                addKey(r, "=\\<", 1.5f, KS.SPECIAL) { layer = 2; buildTypePanel() }
-                "*\"':;!?".forEach { addChar(r, it, false) }
-                addRepeatKey(r, 1.5f)
-                panelType.addView(r)
-            }
-            else -> {
-                panelType.addView(charRow("[]{}<>^~|\\", false, false))
-                panelType.addView(charRow("_=+-*/&%$€", false, false))
-                val r = newRow()
-                addKey(r, "?123", 1.5f, KS.SPECIAL) { layer = 1; buildTypePanel() }
-                ".,?!'\":".forEach { addChar(r, it, false) }
-                addRepeatKey(r, 1.5f)
-                panelType.addView(r)
-            }
-        }
-
-        val b = newRow()
-        addKey(b, if (layer == 0) "?123" else "ABC", 1.5f, KS.SPECIAL) { layer = if (layer == 0) 1 else 0; buildTypePanel() }
-        addKey(b, if (vn) "VN" else "EN", 1.2f, KS.SPECIAL) { finishComposing(); vn = !vn; buildTypePanel() }
-        addKey(b, ",", 1f, KS.NORMAL) { type(",") }
-        addSpaceKey(b)                                      // phím cách: vuốt ngang để di chuyển con trỏ
-        addKey(b, ".", 1f, KS.NORMAL) { type(".") }
-        addIconKey(b, R.drawable.ic_enter, 1.5f, KS.ACCENT) {
-            if (searchActive) endSearch() else { finishComposing(); sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER) }
-        }
-        panelType.addView(b)
-
-        Fonts.apply(panelType)
+        val b = TypePanelBuilder(this, styleKb, spaceStyle, rowHeightPx(), vn, layer, shift, keyBinder)
+        b.build(panelType)
+        keyViews.clear(); keyViews.addAll(b.keyViews)
+        letterKeys.clear(); letterKeys.addAll(b.letterKeys)
+        shiftKey = b.shiftKey
+        spaceView = b.spaceView
         applyKbText()
         refreshShift()
-    }
-
-    private fun newRow(): LinearLayout = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL
-        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, rowHeightPx())
-        setPadding(0, dp(styleKb.gapDp * 2 / 3), 0, dp(styleKb.gapDp * 2 / 3))
-        clipChildren = false
-        clipToPadding = false
-    }
-
-    private fun charRow(chars: String, letters: Boolean, pad: Boolean): LinearLayout {
-        val r = newRow()
-        if (pad) r.addView(Space(this), LinearLayout.LayoutParams(0, 1, 0.5f))
-        chars.forEach { addChar(r, it, letters) }
-        if (pad) r.addView(Space(this), LinearLayout.LayoutParams(0, 1, 0.5f))
-        return r
-    }
-
-    private fun kindOf(style: KS) = when (style) {
-        KS.NORMAL -> ThemeRender.Kind.NORMAL
-        KS.SPECIAL -> ThemeRender.Kind.SPECIAL
-        KS.ACCENT -> ThemeRender.Kind.ACCENT
-    }
-
-    private fun place(row: LinearLayout, v: View, weight: Float) {
-        val lp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, weight)
-        lp.setMargins(dp(styleKb.gapDp), 0, dp(styleKb.gapDp), 0)
-        row.addView(v, lp)
-    }
-
-    private fun addKey(row: LinearLayout, label: String, weight: Float, style: KS, onClick: () -> Unit): TextView {
-        val tv = TextView(this)
-        tv.text = label
-        tv.gravity = Gravity.CENTER
-        tv.setTextColor(ContextCompat.getColor(this, R.color.text))
-        tv.textSize = (if (label.length > 1) 14f else 19f) * styleKb.fontScale / 100f
-        tv.isClickable = true
-        tv.background = ThemeRender.keyBg(this, styleKb, kindOf(style))
-        ThemeRender.elevate(tv, styleKb)
-        keyViews.add(tv)
-        place(row, tv, weight)
-        tv.setOnClickListener { onClick() }
-        pressEffect(tv, true)
-        return tv
-    }
-
-    /** Phím dùng biểu tượng (kích thước icon luôn 24dp, giống hàng nút ở màn hình quét). */
-    private fun addIconKey(row: LinearLayout, iconRes: Int, weight: Float, style: KS, onClick: () -> Unit): ImageView {
-        val iv = ImageView(this)
-        iv.setImageResource(iconRes)
-        ThemeRender.styleIcon(iv, styleKb)
-        iv.scaleType = ImageView.ScaleType.FIT_CENTER
-        iv.setPadding(dp(13), dp(13), dp(13), dp(13))
-        iv.isClickable = true
-        iv.background = ThemeRender.keyBg(this, styleKb, kindOf(style))
-        ThemeRender.elevate(iv, styleKb)
-        keyViews.add(iv)
-        place(row, iv, weight)
-        iv.setOnClickListener { onClick() }
-        pressEffect(iv, true)
-        return iv
-    }
-
-    private fun addChar(row: LinearLayout, c: Char, letter: Boolean) {
-        val label = if (letter && shift > 0) c.uppercaseChar().toString() else c.toString()
-        val key = addKey(row, label, 1f, KS.NORMAL) { typeChar(c, letter) }
-        if (letter) letterKeys.add(key to c)
-    }
-
-    /** Phím cách: kiểu riêng theo giao diện; chạm để gõ dấu cách, vuốt ngang để di chuyển con trỏ. */
-    private fun addSpaceKey(row: LinearLayout) {
-        val sp = spaceStyle
-        val tv = TextView(this)
-        tv.gravity = Gravity.CENTER
-        tv.setSingleLine()
-        tv.setTextColor(ContextCompat.getColor(this, R.color.text))
-        tv.textSize = 14f * styleKb.fontScale / 100f
-        tv.isClickable = true
-        tv.background = SpaceRender.background(this, styleKb, sp)
-        ThemeRender.elevate(tv, SpaceRender.shapeStyle(styleKb, sp))
-        spaceView = tv
-        keyViews.add(tv)
-        place(row, tv, sp.weight / 10f)
-        bindSpace(tv)
     }
 
     /** Dịch con trỏ sang trái / phải một ký tự (kết thúc chữ Telex đang gõ dở trước). */
@@ -1438,56 +1269,6 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
             }
             true
         }
-    }
-
-    private fun addRepeatKey(row: LinearLayout, weight: Float) {
-        val iv = addIconKey(row, R.drawable.ic_backspace, weight, KS.SPECIAL) { }
-        bindRepeat(iv, true) { handleDelete() }
-    }
-
-    /** Chèn văn bản thường (kết thúc từ Telex đang gõ dở trước). */
-    private fun type(s: String) {
-        if (searchActive) { searchText += s; updateSearchBar(); return }
-        finishComposing()
-        currentInputConnection?.commitText(s, 1)
-    }
-
-    private fun typeChar(c: Char, letter: Boolean) {
-        val ch = if (letter && shift > 0) c.uppercaseChar() else c
-        if (vn && letter && !searchActive) telexKey(ch) else type(ch.toString())
-        if (letter && shift == 1) { shift = 0; refreshShift() }
-    }
-
-    private fun telexKey(ch: Char) {
-        val ic = currentInputConnection ?: return
-        telex.push(ch)
-        ic.setComposingText(telex.text(), 1)
-        lastComposeAt = SystemClock.elapsedRealtime()
-    }
-
-    /** Chốt từ đang gõ dở (giữ nguyên chữ đã hiện). */
-    private fun finishComposing() {
-        if (!telex.isEmpty) {
-            telex.reset()
-            currentInputConnection?.finishComposingText()
-        }
-    }
-
-    /** Xóa: nếu đang gõ dở một từ Telex thì bỏ phím cuối của từ đó, ngược lại xóa ký tự như bình thường. */
-    private fun handleDelete() {
-        if (searchActive) { searchText = searchText.dropLast(1); updateSearchBar(); return }
-        if (!telex.isEmpty) {
-            telex.backspace()
-            currentInputConnection?.setComposingText(if (telex.isEmpty) "" else telex.text(), 1)
-            lastComposeAt = SystemClock.elapsedRealtime()
-        } else {
-            sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
-        }
-    }
-
-    private fun toggleShift() {
-        shift = when (shift) { 0 -> 1; 1 -> 2; else -> 0 }
-        refreshShift()
     }
 
     private fun refreshShift() {

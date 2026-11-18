@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -402,6 +403,71 @@ object ScanButtons {
         iv.isClickable = false
         iv.isFocusable = false
         return iv
+    }
+
+    /** Kết quả dựng: các nút, hàng trên, hàng dưới và danh sách nút theo từng khu vực. */
+    class Assembled(
+        val buttons: Map<String, ImageView>,
+        val custom: Set<String>,          // các nút đang dùng ảnh riêng (không đổi biểu tượng theo trạng thái)
+        val top: View,
+        val bottom: View,
+        val topViews: List<View>,
+        val bottomViews: List<View>,
+        val toolViews: List<View>
+    )
+
+    /**
+     * Dựng toàn bộ nút theo bố cục [lay] với kiểu [st]: tạo nút, áp giao diện, xếp hàng trên và hàng dưới.
+     * Bàn phím thật và các bản xem trước đều gọi hàm này nên hình dạng, kích thước, khoảng cách giống nhau tuyệt đối.
+     */
+    fun assemble(ctx: Context, lay: ScanLayout, st: PanelStyle): Assembled {
+        forgetBitmaps()
+        val m = makeAll(ctx, lay)
+        val custom = HashSet<String>()
+        for ((k, b) in m) {
+            val hasImg = hasCustomImage(ctx, lay, k)
+            if (hasImg) custom.add(k)
+            ThemeRender.styleButton(
+                ctx, b, st,
+                if (ScanLayout.isToggle(k)) ThemeRender.Kind.TOGGLE else ThemeRender.Kind.NORMAL,
+                hasImg
+            )
+        }
+        val top = buildRows(ctx, lay, m, lay.top, lay.perRowTop)
+        val bottom = buildRows(ctx, lay, m, lay.bottom, lay.perRowBottom)
+        return Assembled(
+            m, custom, top, bottom,
+            lay.top.mapNotNull { m[it] }, lay.bottom.mapNotNull { m[it] }, lay.tools.mapNotNull { m[it] }
+        )
+    }
+
+    /** Khung của nhóm Công cụ (nền, đệm, cuộn ngang). Trả về khung ngoài và hàng nút bên trong. */
+    fun newToolsBox(ctx: Context): Pair<FrameLayout, LinearLayout> {
+        val d = ctx.resources.displayMetrics.density
+        val box = FrameLayout(ctx).apply {
+            setBackgroundResource(R.drawable.bg_flyout)
+            setPadding((6 * d).toInt(), (6 * d).toInt(), (6 * d).toInt(), (6 * d).toInt())
+        }
+        val sc = android.widget.HorizontalScrollView(ctx).apply {
+            isHorizontalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+        }
+        val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        sc.addView(row, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        box.addView(sc, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        return Pair(box, row)
+    }
+
+    /** Xếp các nút công cụ vào hàng của bảng Công cụ (cách nhau 3dp như bàn phím thật). */
+    fun fillTools(ctx: Context, row: LinearLayout, buttons: Map<String, ImageView>, keys: List<String>) {
+        val d = ctx.resources.displayMetrics.density
+        for (k in keys) {
+            val b = buttons[k] ?: continue
+            (b.parent as? ViewGroup)?.removeView(b)
+            row.addView(b, LinearLayout.LayoutParams(b.layoutParams.width, b.layoutParams.height).apply {
+                setMargins((3 * d).toInt(), 0, (3 * d).toInt(), 0)
+            })
+        }
     }
 
     fun makeAll(ctx: Context, lay: ScanLayout): Map<String, ImageView> =

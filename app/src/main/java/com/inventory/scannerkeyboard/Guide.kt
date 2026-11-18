@@ -487,6 +487,7 @@ private class GuideBuilder(private val a: Activity, private val host: LinearLayo
             "Tùy chỉnh nút Scan",
             "• Ba khu vực: Hàng trên, Hàng dưới và Công cụ. Kéo ≡ để đổi thứ tự, bấm ⇄ để chuyển nút sang khu vực khác.\n" +
                 "• Mỗi hàng tối đa 10 nút; chỉnh kích thước, căn lề, bo góc và khoảng cách giữa các hàng.\n" +
+                "• Khung xem trước được ghim cố định phía trên và đồng bộ ngay khi chỉnh; nó dựng bằng chính mã của bàn phím thật nên khớp 100% khi áp dụng.\n" +
                 "• Mọi thay đổi tự lưu và áp dụng ngay cho bàn phím.\n" +
                 "• Chạm một nút ở mục Chỉnh sửa nút để thêm hình ảnh PNG riêng cho nút đó.",
             null,

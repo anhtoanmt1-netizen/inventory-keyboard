@@ -98,7 +98,7 @@ class ThemeActivity : Activity() {
             text = "Tùy chỉnh giao diện"; textSize = 20f; setTextColor(col(R.color.text)); setTypeface(null, Typeface.BOLD)
         })
         head.addView(TextView(this).apply {
-            text = "Thay đổi được lưu và xem trước ngay. Bàn phím dùng giao diện mới khi bạn mở lại bàn phím."
+            text = "Thay đổi được lưu, xem trước và áp dụng cho bàn phím ngay (xem trước dựng bằng chính mã của bàn phím thật)."
             textSize = 12f; setTextColor(col(R.color.muted)); setPadding(0, dp(2), 0, 0)
         })
         root.addView(head)
@@ -252,21 +252,42 @@ class ThemeActivity : Activity() {
         refreshPreview()
     }
 
+    private var previewBig = false
+    private var previewPending = false
+
+    /** Xem trước cập nhật ngay mỗi khi có thay đổi (gộp nhiều thay đổi trong cùng một khung hình). */
     private fun refreshPreview() {
+        if (previewPending) return
+        previewPending = true
+        previewHost.post { previewPending = false; renderPreview() }
+    }
+
+    /**
+     * Xem trước dựng bằng chính mã của bàn phím thật (nút, phím, phím Space, nền, bố cục, khoảng cách, hiệu ứng) ở bề rộng
+     * thật rồi thu nhỏ đều, nên mọi giá trị đang chỉnh hiện đúng như khi áp dụng lên bàn phím.
+     */
+    private fun renderPreview() {
         previewHost.removeAllViews()
         val t = cur()
-        // Chưa chọn phạm vi thì hiện cả hai bảng. Chiều rộng, căn lề, một tay và nâng đáy cũng hiện ở đây.
-        val full = resources.displayMetrics.widthPixels
-        if (scope != 1 && group != 7) {
-            val l = lp(MATCH, WRAP)
-            ThemeRender.applyPanelLayout(l, t.scan, full, d)
-            previewHost.addView(ThemeRender.previewScan(this, t.scan), l)
-        }
-        if (scope != 0 || group == 7) {
-            val l = lp(MATCH, WRAP).apply { topMargin = if ((scope == -1 || scope == 2) && group != 7) dp(6) else 0 }
-            ThemeRender.applyPanelLayout(l, t.kb, full, d)
-            previewHost.addView(ThemeRender.previewKeyboard(this, t.kb, min(prefs.keyRowDp, 44), t.space), l)
-        }
+        val dm = resources.displayMetrics
+        val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(16), 0, dp(16), dp(4)) }
+        bar.addView(TextView(this).apply {
+            text = "XEM TRƯỚC · khớp bàn phím thật"; textSize = 11f; setTextColor(col(R.color.accent))
+            setTypeface(null, Typeface.BOLD); letterSpacing = 0.05f
+        }, lp(0, WRAP).apply { weight = 1f })
+        bar.addView(TextView(this).apply {
+            text = if (previewBig) "THU NHỎ" else "PHÓNG TO"; textSize = 10f; setTextColor(col(R.color.text)); setTypeface(null, Typeface.BOLD)
+            setBackgroundResource(R.drawable.bg_toggle); setPadding(dp(10), dp(5), dp(10), dp(5)); isClickable = true
+            setOnClickListener { previewBig = !previewBig; refreshPreview() }
+        })
+        previewHost.addView(bar)
+        // Chưa chọn phạm vi thì hiện cả hai bảng; phím Space thuộc bảng Gõ phím.
+        val opts = KbPreview.Opts(
+            scan = scope != 1 && group != 7, type = scope != 0 || group == 7,
+            maxHeightPx = (dm.heightPixels * (if (previewBig) 0.6f else 0.36f)).toInt()
+        )
+        val v = KbPreview.build(this, opts, ScanLayout.fromJson(prefs.scanLayoutJson), t, dm.widthPixels)
+        previewHost.addView(v, lp(MATCH, WRAP))
     }
 
     private fun refreshList() {

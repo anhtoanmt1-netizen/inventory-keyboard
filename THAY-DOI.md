@@ -39,6 +39,17 @@ và toàn bộ giá trị độ nhạy đều giữ nguyên từng dòng. Các f
   - Tùy chỉnh nút Scan tự động lưu (sau 0,35 giây hoặc khi thoát), không còn mất thay đổi nếu quên bấm Áp dụng.
   - Màn Cài đặt chính lưu ngay khi đổi công tắc hoặc ngừng gõ ô số (trước đây chỉ lưu khi thoát màn hình).
 
+## Đợt xem trước chính xác (bản 2.3)
+- **Xem trước ghim cố định**: ở Tùy chỉnh nút Scan, khung xem trước nay nằm cố định phía trên, danh sách tùy chỉnh cuộn bên dưới (Tùy chỉnh giao diện vốn đã ghim). Có nút PHÓNG TO / THU NHỎ khung xem trước.
+- **Đồng bộ tức thì**: mỗi thay đổi cập nhật xem trước ngay trong cùng khung hình (gộp nhiều thay đổi liên tiếp khi kéo thanh trượt).
+- **Khớp 100% với bàn phím thật**: trước đây xem trước là bản vẽ lại gần giống nên lệch (hàng phím bị giới hạn 44dp, thiếu hàng số, khung camera 50dp, hàng dưới mặc định...). Nay bản xem trước dùng đúng:
+  - layout `keyboard_view.xml` của bàn phím thật,
+  - bộ dựng nút (`ScanButtons.assemble`: kích thước, bo góc, ảnh riêng, khoảng cách hàng),
+  - bộ dựng các hàng phím (`TypePanelBuilder`: hàng số, phím Space riêng, chiều cao hàng theo cài đặt),
+  - hàm áp giao diện (`KbLook`: nền, chiều rộng, căn lề, nâng đáy) và hiệu ứng ánh sáng / chạm.
+  Bàn phím thật cũng gọi lại cùng các hàm đó, nên không thể lệch nhau. Xem trước dựng ở bề rộng thật của màn hình rồi thu nhỏ đều.
+- Xem trước nút Scan hiển thị cả bảng Công cụ nổi (nút Công cụ sáng lên), canh theo vị trí nút Công cụ như bàn phím thật. Chạm một nút trong xem trước để chọn chỉnh nút đó.
+
 ## Lưu ý
 - Hàng trên có thêm nút Clipboard (danh sách yêu cầu không nhắc, nhưng bỏ đi sẽ mất chức năng hiện có).
 - Phiên bản này chưa được biên dịch hay chạy thử trong môi trường soạn thảo (không có Android SDK). Hãy build bằng GitHub Actions và thử các mục ở trên.
