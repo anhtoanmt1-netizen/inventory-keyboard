@@ -243,7 +243,15 @@ object KbLook {
  * Khung chứa hiển thị nội dung ở bề rộng THẬT của bàn phím ([contentW] px) rồi thu nhỏ đều (cả chiều ngang và dọc)
  * cho vừa khung xem trước. Nhờ vậy mọi tỉ lệ, khoảng cách, số nút trên hàng đều đúng như bàn phím thật.
  */
-class ScaledBox(ctx: Context, private val child: View, private val contentW: Int, private val maxH: Int) : FrameLayout(ctx) {
+class ScaledBox(
+    ctx: Context,
+    private val child: View,
+    private val contentW: Int,
+    private val maxH: Int,
+    private val frameH: Int = 0,          // > 0: chiều cao khung CỐ ĐỊNH (không đổi khi nội dung đổi)
+    private val fixedScale: Float = 0f,   // > 0: giữ nguyên tỉ lệ thu nhỏ, chỉ thu nhỏ thêm nếu nội dung vượt khung
+    private val onScale: ((Float) -> Unit)? = null
+) : FrameLayout(ctx) {
     private var scale = 1f
     private var childH = 0
     private val cleanups = ArrayList<() -> Unit>()
@@ -270,9 +278,15 @@ class ScaledBox(ctx: Context, private val child: View, private val contentW: Int
             MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
         )
         childH = child.measuredHeight
-        scale = minOf(1f, avail.toFloat() / contentW)
-        if (maxH > 0 && childH * scale > maxH) scale = maxH.toFloat() / childH
-        setMeasuredDimension(avail, (childH * scale).toInt())
+        val widthScale = minOf(1f, avail.toFloat() / contentW)
+        val limit = if (frameH > 0) frameH else maxH
+        var sc = if (fixedScale > 0f) minOf(fixedScale, widthScale) else widthScale
+        // Lần dựng đầu: chừa thêm ~12% chiều cao để các thay đổi nhỏ (khoảng cách, số hàng) không làm khung phải thu nhỏ lại
+        if (fixedScale <= 0f && limit > 0) sc = minOf(sc, limit / (childH * 1.12f))
+        else if (limit > 0 && childH * sc > limit) sc = limit.toFloat() / childH
+        scale = sc
+        onScale?.invoke(sc)
+        setMeasuredDimension(avail, if (frameH > 0) frameH else (childH * sc).toInt())
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
@@ -292,7 +306,10 @@ object KbPreview {
         val type: Boolean,                         // hiện bảng Gõ phím
         val toolsOpen: Boolean = false,            // hiện bảng Công cụ nổi phía trên bàn phím
         val onPick: ((String) -> Unit)? = null,    // chạm một nút để chọn (màn hình Tùy chỉnh nút Scan)
-        val maxHeightPx: Int = 0                   // chiều cao tối đa của khung xem trước (0 = không giới hạn)
+        val maxHeightPx: Int = 0,                  // chiều cao tối đa của khung xem trước (0 = không giới hạn)
+        val frameHeightPx: Int = 0,                // > 0: khung xem trước có chiều cao CỐ ĐỊNH (không nhảy khi chỉnh)
+        val fixedScale: Float = 0f,                // > 0: giữ nguyên tỉ lệ thu nhỏ giữa các lần dựng
+        val onScale: ((Float) -> Unit)? = null     // nhận tỉ lệ thu nhỏ đang dùng để giữ ổn định cho lần dựng sau
     )
 
     fun build(ctx: Context, opts: Opts, layIn: ScanLayout, theme: KbTheme?, availPx: Int): View {
@@ -301,7 +318,6 @@ object KbPreview {
         val styleScan = theme?.scan ?: PanelStyle()
         val styleKb = theme?.kb ?: PanelStyle()
         val space = theme?.space ?: SpaceStyle()
-        val btnSt = if (lay.cornerDp >= 0) styleScan.copy(cornerDp = lay.cornerDp) else styleScan
         val dm = ctx.resources.displayMetrics
         val d = dm.density
         val fullW = dm.widthPixels
@@ -322,11 +338,13 @@ object KbPreview {
         cameraBox.layoutParams.height = dp(prefs.cameraHeightDp.coerceIn(120, 420))
 
         // Hàng trên / hàng dưới / nhóm Công cụ: đúng bộ dựng của bàn phím thật
-        val asm = ScanButtons.assemble(ctx, lay, btnSt)
+        val asm = ScanButtons.assemble(ctx, lay, styleScan)
         topArea.addView(asm.top)
         btnArea.addView(asm.bottom)
-        topArea.setPadding(0, 0, 0, dp(lay.gapTopBelowDp))
-        gapBelowCamera.layoutParams = gapBelowCamera.layoutParams.apply { height = dp(lay.gapBottomAboveDp) }
+        ScanButtons.applyAreaPads(ctx, lay, topArea, btnArea, gapBelowCamera)
+        val topSt = ScanButtons.btnStyle(styleScan, lay, ScanLayout.AREA_TOP)
+        val botSt = ScanButtons.btnStyle(styleScan, lay, ScanLayout.AREA_BOTTOM)
+        val toolSt = ScanButtons.btnStyle(styleScan, lay, ScanLayout.AREA_TOOLS)
         if (opts.toolsOpen) asm.buttons["tools"]?.isSelected = true
         opts.onPick?.let { pick -> for ((k, b) in asm.buttons) b.setOnClickListener { pick(k) } }
 
@@ -345,8 +363,8 @@ object KbPreview {
         // Hiệu ứng chạm / ánh sáng giống bàn phím thật
         val fxList = ArrayList<FxDrawable>()
         fxList.add(FxDrawable(panelType) { builder.keyViews }.also { it.style = styleKb; it.attach() })
-        fxList.add(FxDrawable(btnArea) { asm.bottomViews }.also { it.style = btnSt; it.attach() })
-        fxList.add(FxDrawable(topArea) { asm.topViews }.also { it.style = btnSt; it.attach() })
+        fxList.add(FxDrawable(btnArea) { asm.bottomViews }.also { it.style = botSt; it.attach() })
+        fxList.add(FxDrawable(topArea) { asm.topViews }.also { it.style = topSt; it.attach() })
 
         KbLook.styleTypePanel(ctx, panelType, styleKb, fullW)
         KbLook.styleScanPanel(ctx, panelScan, tvStatus, tvHint, styleScan, fullW, statusColor0, hintColor0)
@@ -356,14 +374,14 @@ object KbPreview {
         val content = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; clipChildren = false; clipToPadding = false }
         if (opts.toolsOpen) {
             val (box, row) = ScanButtons.newToolsBox(ctx)
-            ScanButtons.fillTools(ctx, row, asm.buttons, lay.tools)
+            ScanButtons.fillTools(ctx, row, lay, asm.buttons)
             if (lay.tools.isEmpty()) row.addView(TextView(ctx).apply {
                 text = "Nhóm Công cụ đang trống"; textSize = 12f
                 setTextColor(ContextCompat.getColor(ctx, R.color.muted)); setPadding(dp(8), dp(10), dp(8), dp(10))
             })
-            fxList.add(FxDrawable(box) { asm.toolViews }.also { it.style = btnSt; it.attach() })
+            fxList.add(FxDrawable(box) { asm.toolViews }.also { it.style = toolSt; it.attach() })
             val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-            lp.bottomMargin = dp(6)
+            lp.bottomMargin = dp(lay.toolsStyle.padBottomDp)
             lp.marginStart = dp(8)
             content.addView(box, lp)
             // Canh bảng nổi theo vị trí nút Công cụ, giống bàn phím thật
@@ -376,7 +394,8 @@ object KbPreview {
                     var v: View? = tb
                     while (v != null && v !== kb) { x += v.left; v = v.parent as? View }
                     val w = box.width
-                    val want = (x + tb.width / 2 - w / 2).coerceIn(dp(8), (fullW - w - dp(8)).coerceAtLeast(dp(8)))
+                    // Cùng hàm vị trí với bàn phím thật (theo bộ thông số riêng của nhóm Công cụ)
+                    val want = ScanButtons.toolsPanelX(lay.toolsStyle, d, x + tb.width / 2, w, fullW)
                     (box.layoutParams as LinearLayout.LayoutParams).marginStart = want
                     box.requestLayout()
                 }
@@ -384,7 +403,7 @@ object KbPreview {
         }
         content.addView(kb, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
-        val sb = ScaledBox(ctx, content, fullW, opts.maxHeightPx)
+        val sb = ScaledBox(ctx, content, fullW, opts.maxHeightPx, opts.frameHeightPx, opts.fixedScale, opts.onScale)
         sb.onRelease { for (f in fxList) f.detach() }
         sb.layoutParams = ViewGroup.LayoutParams(availPx.coerceAtLeast(1), ViewGroup.LayoutParams.WRAP_CONTENT)
         return sb

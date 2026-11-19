@@ -11,8 +11,8 @@ android {
         applicationId = "com.inventory.scannerkeyboard"
         minSdk = 26
         targetSdk = 34
-        versionCode = 6
-        versionName = "2.3.1"
+        versionCode = 7
+        versionName = "2.4"
     }
     buildTypes {
         release { isMinifyEnabled = false }

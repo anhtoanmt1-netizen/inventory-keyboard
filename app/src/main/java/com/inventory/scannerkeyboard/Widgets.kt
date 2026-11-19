@@ -1,6 +1,7 @@
 package com.inventory.scannerkeyboard
 
 import android.content.Context
+import android.graphics.Rect
 import android.graphics.Typeface
 import android.os.Handler
 import android.os.Looper
@@ -8,7 +9,9 @@ import android.os.SystemClock
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.ViewGroup
+import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.core.content.ContextCompat
@@ -159,5 +162,31 @@ class SeekRow(
         SeekAssist.tick(ctx)
         onValue(n)
         return true
+    }
+}
+
+
+/**
+ * ScrollView ổn định cho màn hình tùy chỉnh: không tự cuộn / nhảy lên khi nội dung được dựng lại hoặc khi một ô
+ * (thanh trượt, nút) nhận tiêu điểm. Chỉ cuộn theo thao tác của người dùng (và khi đang gõ vào ô nhập).
+ */
+class StableScrollView(ctx: android.content.Context) : ScrollView(ctx) {
+    override fun computeScrollDeltaToGetChildRectOnScreen(rect: Rect): Int =
+        if (findFocus() is EditText) super.computeScrollDeltaToGetChildRectOnScreen(rect) else 0
+
+    /**
+     * Dựng lại nội dung bên trong [block] mà vẫn giữ nguyên vị trí cuộn: khôi phục ngay trước khi vẽ khung hình kế tiếp
+     * nên không bị nhảy.
+     */
+    fun keepScroll(block: () -> Unit) {
+        val y = scrollY
+        block()
+        viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                viewTreeObserver.removeOnPreDrawListener(this)
+                if (scrollY != y) scrollTo(0, y)
+                return true
+            }
+        })
     }
 }

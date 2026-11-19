@@ -27,6 +27,50 @@ data class BtnCfg(
 )
 
 /**
+ * Bộ thông số bố cục và vị trí RIÊNG của một khu vực nút (hàng trên, hàng dưới hoặc nhóm Công cụ).
+ * Ba khu vực có ba bộ thông số độc lập; đổi khu vực nào chỉ ảnh hưởng khu vực đó.
+ */
+data class AreaStyle(
+    val perRow: Int = 7,                       // số nút mỗi hàng (1..10)
+    val widthDp: Int = 46,                     // chiều rộng nút (dp)
+    val heightDp: Int = 46,                    // chiều cao nút (dp)
+    val scale: Int = 100,                      // thu phóng chung của khu vực (%)
+    val gapDp: Int = 6,                        // khoảng cách ngang giữa các nút (dp)
+    val rowGapDp: Int = 4,                     // khoảng cách dọc giữa các hàng nút (dp)
+    val align: Int = ScanLayout.ALIGN_CENTER,  // căn lề (nhóm Công cụ: 0 sát trái, 1 theo nút Công cụ, 2 sát phải, 3 giữa màn hình)
+    val grid: Boolean = true,                  // căn theo cột (lưới); nhóm Công cụ không dùng
+    val cornerDp: Int = -1,                    // bo góc nút (dp, 0..30); -1 = theo giao diện đang dùng
+    val padTopDp: Int = 0,                     // khoảng cách phía trên khu vực (dp)
+    val padBottomDp: Int = 0,                  // khoảng cách phía dưới khu vực (dp); nhóm Công cụ: cách mép trên bàn phím
+    val offsetXDp: Int = 0                     // dịch ngang khu vực sang trái (âm) / phải (dương) (dp)
+) {
+    fun toJson(): JSONObject = JSONObject()
+        .put("perRow", perRow).put("w", widthDp).put("h", heightDp).put("scale", scale).put("gap", gapDp)
+        .put("rowGap", rowGapDp).put("align", align).put("grid", grid).put("corner", cornerDp)
+        .put("padTop", padTopDp).put("padBottom", padBottomDp).put("offsetX", offsetXDp)
+
+    companion object {
+        fun fromJson(o: JSONObject?, d: AreaStyle, tools: Boolean): AreaStyle {
+            if (o == null) return d
+            return AreaStyle(
+                perRow = o.optInt("perRow", d.perRow).coerceIn(1, ScanLayout.MAX_PER_ROW),
+                widthDp = o.optInt("w", d.widthDp).coerceIn(32, 96),
+                heightDp = o.optInt("h", d.heightDp).coerceIn(32, 96),
+                scale = o.optInt("scale", d.scale).coerceIn(60, 160),
+                gapDp = o.optInt("gap", d.gapDp).coerceIn(0, 24),
+                rowGapDp = o.optInt("rowGap", d.rowGapDp).coerceIn(0, 24),
+                align = o.optInt("align", d.align).coerceIn(0, if (tools) 3 else 4),
+                grid = o.optBoolean("grid", d.grid),
+                cornerDp = o.optInt("corner", d.cornerDp).coerceIn(-1, 30),
+                padTopDp = o.optInt("padTop", d.padTopDp).coerceIn(0, 48),
+                padBottomDp = o.optInt("padBottom", d.padBottomDp).coerceIn(0, 48),
+                offsetXDp = o.optInt("offsetX", d.offsetXDp).coerceIn(-80, 80)
+            )
+        }
+    }
+}
+
+/**
  * Bố cục các nút chức năng, chia làm ba khu vực:
  *  - HÀNG TRÊN: hiện ở mọi chế độ (Quét / Gõ phím / Clipboard);
  *  - HÀNG DƯỚI: nằm dưới khung camera ở bảng Scan;
@@ -38,19 +82,10 @@ data class ScanLayout(
     val top: List<String> = DEFAULT_TOP,
     val bottom: List<String> = DEFAULT_BOTTOM,
     val tools: List<String> = DEFAULT_TOOLS,
-    val perRowTop: Int = 7,       // số nút mỗi hàng ở khu vực trên (1..10)
-    val perRowBottom: Int = 6,    // số nút mỗi hàng ở khu vực dưới (1..10)
-    val widthDp: Int = 46,        // chiều rộng nút (dp)
-    val heightDp: Int = 46,       // chiều cao nút (dp)
-    val scale: Int = 100,         // thu phóng chung (%)
-    val gapDp: Int = 6,           // khoảng cách ngang giữa các nút (dp), dùng khi căn Trái/Giữa/Phải
-    val align: Int = ALIGN_CENTER,
-    val grid: Boolean = true,     // true: căn theo cột (lưới), false: mỗi hàng tự căn riêng
-    val buttons: Map<String, BtnCfg> = emptyMap(),
-    val cornerDp: Int = -1,       // bo góc các nút (dp, 0..30); -1 = theo giao diện đang dùng
-    val gapTopBelowDp: Int = 0,   // khoảng cách giữa hàng trên và bàn phím / khung camera bên dưới (dp)
-    val gapBottomAboveDp: Int = 6,// khoảng cách giữa bàn phím / khung camera và hàng dưới (dp)
-    val rowGapDp: Int = 4         // khoảng cách dọc giữa các hàng nút trong cùng một khu vực (dp)
+    val topStyle: AreaStyle = DEFAULT_TOP_STYLE,        // bộ thông số riêng của hàng trên
+    val bottomStyle: AreaStyle = DEFAULT_BOTTOM_STYLE,  // bộ thông số riêng của hàng dưới
+    val toolsStyle: AreaStyle = DEFAULT_TOOLS_STYLE,    // bộ thông số riêng của nhóm Công cụ
+    val buttons: Map<String, BtnCfg> = emptyMap()
 ) {
     companion object {
         const val ALIGN_LEFT = 0
@@ -60,6 +95,11 @@ data class ScanLayout(
         const val ALIGN_AROUND = 4    // cách đều: có khoảng ở cả hai đầu
 
         const val MAX_PER_ROW = 10
+
+        // Mặc định của từng khu vực: giữ đúng giao diện ban đầu
+        val DEFAULT_TOP_STYLE = AreaStyle(perRow = 7)
+        val DEFAULT_BOTTOM_STYLE = AreaStyle(perRow = 6, padTopDp = 6)
+        val DEFAULT_TOOLS_STYLE = AreaStyle(perRow = 10, grid = false, padBottomDp = 6)
 
         const val AREA_TOP = 0
         const val AREA_BOTTOM = 1
@@ -174,19 +214,35 @@ data class ScanLayout(
                         )
                     }
                 }
-                ScanLayout(
-                    t, b, tl,
-                    o.optInt("pTop", d.perRowTop).coerceIn(1, MAX_PER_ROW),
-                    o.optInt("pBot", d.perRowBottom).coerceIn(1, MAX_PER_ROW),
-                    o.optInt("w", d.widthDp).coerceIn(32, 96),
-                    o.optInt("h", d.heightDp).coerceIn(32, 96), o.optInt("scale", d.scale).coerceIn(60, 160),
-                    o.optInt("gap", d.gapDp).coerceIn(0, 24), o.optInt("align", d.align).coerceIn(0, 4),
-                    o.optBoolean("grid", d.grid), btns,
-                    o.optInt("corner", d.cornerDp).coerceIn(-1, 30),
-                    o.optInt("gTop", d.gapTopBelowDp).coerceIn(0, 24),
-                    o.optInt("gBot", d.gapBottomAboveDp).coerceIn(0, 24),
-                    o.optInt("rGap", d.rowGapDp).coerceIn(0, 24)
-                )
+                val styles = o.optJSONObject("styles")
+                val topS: AreaStyle
+                val botS: AreaStyle
+                val toolS: AreaStyle
+                if (styles != null) {
+                    topS = AreaStyle.fromJson(styles.optJSONObject("top"), DEFAULT_TOP_STYLE, false)
+                    botS = AreaStyle.fromJson(styles.optJSONObject("bottom"), DEFAULT_BOTTOM_STYLE, false)
+                    toolS = AreaStyle.fromJson(styles.optJSONObject("tools"), DEFAULT_TOOLS_STYLE, true)
+                } else {
+                    // Bố cục lưu bởi bản cũ (thông số chung): chuyển thành bộ thông số riêng cho từng khu vực, giữ nguyên giao diện
+                    val w = o.optInt("w", 46).coerceIn(32, 96)
+                    val h = o.optInt("h", 46).coerceIn(32, 96)
+                    val sc = o.optInt("scale", 100).coerceIn(60, 160)
+                    val gap = o.optInt("gap", 6).coerceIn(0, 24)
+                    val al = o.optInt("align", ALIGN_CENTER).coerceIn(0, 4)
+                    val grid = o.optBoolean("grid", true)
+                    val corner = o.optInt("corner", -1).coerceIn(-1, 30)
+                    val rg = o.optInt("rGap", 4).coerceIn(0, 24)
+                    topS = AreaStyle(
+                        perRow = o.optInt("pTop", 7).coerceIn(1, MAX_PER_ROW), widthDp = w, heightDp = h, scale = sc, gapDp = gap,
+                        rowGapDp = rg, align = al, grid = grid, cornerDp = corner, padBottomDp = o.optInt("gTop", 0).coerceIn(0, 48)
+                    )
+                    botS = AreaStyle(
+                        perRow = o.optInt("pBot", 6).coerceIn(1, MAX_PER_ROW), widthDp = w, heightDp = h, scale = sc, gapDp = gap,
+                        rowGapDp = rg, align = al, grid = grid, cornerDp = corner, padTopDp = o.optInt("gBot", 6).coerceIn(0, 48)
+                    )
+                    toolS = DEFAULT_TOOLS_STYLE.copy(widthDp = w, heightDp = h, scale = sc, gapDp = gap, rowGapDp = rg, cornerDp = corner)
+                }
+                ScanLayout(t, b, tl, topS, botS, toolS, btns)
             } catch (_: Throwable) { ScanLayout() }
         }
     }
@@ -194,6 +250,20 @@ data class ScanLayout(
     fun cfg(key: String): BtnCfg = buttons[key] ?: BtnCfg()
 
     fun withButton(key: String, c: BtnCfg): ScanLayout = copy(buttons = buttons + (key to c))
+
+    /** Bộ thông số của một khu vực. */
+    fun styleOf(area: Int): AreaStyle = when (area) { AREA_TOP -> topStyle; AREA_BOTTOM -> bottomStyle; else -> toolsStyle }
+
+    fun withStyle(area: Int, st: AreaStyle): ScanLayout = when (area) {
+        AREA_TOP -> copy(topStyle = st)
+        AREA_BOTTOM -> copy(bottomStyle = st)
+        else -> copy(toolsStyle = st)
+    }
+
+    /** Đặt cùng một mức bo góc cho cả ba khu vực (dùng cho hình minh họa). */
+    fun withCorner(c: Int): ScanLayout = copy(
+        topStyle = topStyle.copy(cornerDp = c), bottomStyle = bottomStyle.copy(cornerDp = c), toolsStyle = toolsStyle.copy(cornerDp = c)
+    )
 
     /** Danh sách nút của một khu vực. */
     fun listFor(area: Int): List<String> = when (area) { AREA_TOP -> top; AREA_BOTTOM -> bottom; else -> tools }
@@ -225,11 +295,10 @@ data class ScanLayout(
             k, JSONObject().put("image", c.image ?: JSONObject.NULL).put("imgW", c.imgW).put("imgH", c.imgH)
                 .put("ha", c.imgH_align).put("va", c.imgV_align).put("scale", c.scale)
         )
-        return JSONObject().put("ver", 2)
+        val styles = JSONObject().put("top", topStyle.toJson()).put("bottom", bottomStyle.toJson()).put("tools", toolsStyle.toJson())
+        return JSONObject().put("ver", 3)
             .put("top", JSONArray(top)).put("bottom", JSONArray(bottom)).put("tools", JSONArray(tools))
-            .put("pTop", perRowTop).put("pBot", perRowBottom).put("w", widthDp).put("h", heightDp)
-            .put("scale", scale).put("gap", gapDp).put("align", align).put("grid", grid).put("corner", cornerDp).put("gTop", gapTopBelowDp).put("gBot", gapBottomAboveDp)
-            .put("rGap", rowGapDp).put("buttons", b).toString()
+            .put("styles", styles).put("buttons", b).toString()
     }
 
     /** Tên các file ảnh đang được dùng. */
@@ -255,23 +324,26 @@ object ScanButtons {
      * trên màn hình nhỏ). Nút tự thu hẹp chiều ngang cho vừa, chiều cao giữ nguyên.
      */
     private fun maxWidthPx(ctx: Context, lay: ScanLayout, key: String): Int {
-        val per = when (key) {
-            in lay.top -> lay.perRowTop
-            in lay.bottom -> lay.perRowBottom
-            else -> return Int.MAX_VALUE   // nhóm Công cụ cuộn ngang, không cần thu hẹp
-        }
+        val area = lay.areaOf(key)
+        val st = lay.styleOf(area)
         val d = ctx.resources.displayMetrics.density
-        val avail = ctx.resources.displayMetrics.widthPixels - (8 * d).toInt()
-        val gap = if (lay.grid) 0 else (lay.gapDp * d).toInt()
-        return (avail / per - (2 * d).toInt() - gap).coerceAtLeast((24 * d).toInt())
+        val screen = ctx.resources.displayMetrics.widthPixels
+        // Nhóm Công cụ là bảng nổi nên trừ lề màn hình và đệm của bảng
+        val avail = if (area == ScanLayout.AREA_TOOLS) screen - (28 * d).toInt() else screen - (8 * d).toInt()
+        val grid = area != ScanLayout.AREA_TOOLS && st.grid
+        // Lưới chia đủ số cột; còn lại chỉ tính theo số nút thực có trên hàng
+        val cols = if (grid) st.perRow else minOf(st.perRow, maxOf(1, lay.listFor(area).size))
+        val gap = if (grid) 0 else (st.gapDp * d).toInt()
+        return (avail / cols - (2 * d).toInt() - gap).coerceAtLeast((24 * d).toInt())
     }
 
-    /** Kích thước thật của nút (px) sau khi nhân thu phóng chung và thu phóng riêng. */
+    /** Kích thước thật của nút (px) sau khi nhân thu phóng của khu vực và thu phóng riêng của nút. */
     fun sizePx(ctx: Context, lay: ScanLayout, key: String): Pair<Int, Int> {
         val d = ctx.resources.displayMetrics.density
-        val k = lay.scale / 100f * lay.cfg(key).scale / 100f
-        val w = min((lay.widthDp * d * k).toInt().coerceAtLeast(1), maxWidthPx(ctx, lay, key))
-        return Pair(w, (lay.heightDp * d * k).toInt().coerceAtLeast(1))
+        val st = lay.styleOf(lay.areaOf(key))
+        val k = st.scale / 100f * lay.cfg(key).scale / 100f
+        val w = min((st.widthDp * d * k).toInt().coerceAtLeast(1), maxWidthPx(ctx, lay, key))
+        return Pair(w, (st.heightDp * d * k).toInt().coerceAtLeast(1))
     }
 
     fun hasCustomImage(ctx: Context, lay: ScanLayout, key: String): Boolean {
@@ -314,23 +386,28 @@ object ScanButtons {
         return iv
     }
 
-    /** Dựng các hàng nút (dọc, mỗi hàng ngang) cho danh sách [keys], mỗi hàng tối đa [per] nút. */
-    fun buildRows(ctx: Context, lay: ScanLayout, buttons: Map<String, ImageView>, keys: List<String>, per: Int): LinearLayout {
+    /** Dựng các hàng nút (dọc, mỗi hàng ngang) của một khu vực theo bộ thông số RIÊNG của khu vực đó. */
+    fun buildRows(ctx: Context, lay: ScanLayout, buttons: Map<String, ImageView>, keys: List<String>, area: Int): LinearLayout {
         val d = ctx.resources.displayMetrics.density
+        val st = lay.styleOf(area)
+        val tools = area == ScanLayout.AREA_TOOLS
+        val grid = !tools && st.grid
+        val align = if (tools) ScanLayout.ALIGN_CENTER else st.align
         val root = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
         val usable = keys.filter { buttons.containsKey(it) }
-        val n = per.coerceIn(1, ScanLayout.MAX_PER_ROW)
-        val gap = (lay.gapDp * d / 2).toInt()
+        val n = st.perRow.coerceIn(1, ScanLayout.MAX_PER_ROW)
+        val gap = (st.gapDp * d / 2).toInt()
+        val vpad = (st.rowGapDp * d / 2f).toInt()
         for (chunk in usable.chunked(n)) {
             val row = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding((4 * d).toInt(), (lay.rowGapDp * d / 2f).toInt(), (4 * d).toInt(), (lay.rowGapDp * d / 2f).toInt())
+                setPadding((4 * d).toInt(), vpad, (4 * d).toInt(), vpad)
             }
             val rowH = chunk.maxOf { buttons[it]!!.layoutParams.height }
-            if (lay.grid) {
+            if (grid) {
                 // Căn theo cột: mỗi ô rộng bằng nhau, nút nằm trong ô theo kiểu căn lề đã chọn
-                val g = when (lay.align) { ScanLayout.ALIGN_LEFT -> Gravity.START; ScanLayout.ALIGN_RIGHT -> Gravity.END; else -> Gravity.CENTER_HORIZONTAL }
+                val g = when (align) { ScanLayout.ALIGN_LEFT -> Gravity.START; ScanLayout.ALIGN_RIGHT -> Gravity.END; else -> Gravity.CENTER_HORIZONTAL }
                 for (i in 0 until n) {
                     val cell = FrameLayout(ctx)
                     val key = chunk.getOrNull(i)
@@ -342,18 +419,18 @@ object ScanButtons {
                     row.addView(cell, LinearLayout.LayoutParams(0, rowH, 1f))
                 }
             } else {
-                row.gravity = Gravity.CENTER_VERTICAL or when (lay.align) {
+                row.gravity = Gravity.CENTER_VERTICAL or when (align) {
                     ScanLayout.ALIGN_LEFT -> Gravity.START
                     ScanLayout.ALIGN_RIGHT -> Gravity.END
                     else -> Gravity.CENTER_HORIZONTAL
                 }
                 fun spacer(weight: Float) = row.addView(Space(ctx), LinearLayout.LayoutParams(0, 1, weight))
-                if (lay.align == ScanLayout.ALIGN_AROUND) spacer(0.5f)
+                if (align == ScanLayout.ALIGN_AROUND) spacer(0.5f)
                 chunk.forEachIndexed { i, key ->
                     val b = buttons[key]!!
                     (b.parent as? ViewGroup)?.removeView(b)
                     val lp = LinearLayout.LayoutParams(b.layoutParams.width, b.layoutParams.height)
-                    if (lay.align == ScanLayout.ALIGN_BETWEEN || lay.align == ScanLayout.ALIGN_AROUND) {
+                    if (align == ScanLayout.ALIGN_BETWEEN || align == ScanLayout.ALIGN_AROUND) {
                         row.addView(b, lp)
                         if (i < chunk.size - 1) spacer(1f)
                     } else {
@@ -361,10 +438,13 @@ object ScanButtons {
                         row.addView(b, lp)
                     }
                 }
-                if (lay.align == ScanLayout.ALIGN_AROUND) spacer(0.5f)
+                if (align == ScanLayout.ALIGN_AROUND) spacer(0.5f)
             }
-            root.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, rowH + (lay.rowGapDp * d / 2f).toInt() * 2))
+            root.addView(row, LinearLayout.LayoutParams(
+                if (tools) ViewGroup.LayoutParams.WRAP_CONTENT else ViewGroup.LayoutParams.MATCH_PARENT, rowH + vpad * 2
+            ))
         }
+        if (!tools) root.translationX = st.offsetXDp * d     // dịch ngang cả khu vực
         return root
     }
 
@@ -382,23 +462,28 @@ object ScanButtons {
         return strip
     }
 
-    /** Kiểu nút Scan đang dùng: theo giao diện đang chọn, riêng bo góc lấy theo bố cục nếu người dùng đã đặt. */
-    fun styleFor(ctx: Context, lay: ScanLayout): PanelStyle {
-        val base = ThemeStore.load(ctx).current()?.scan ?: PanelStyle()
-        return if (lay.cornerDp >= 0) base.copy(cornerDp = lay.cornerDp) else base
+    /** Kiểu nút Scan của giao diện đang chọn (chưa áp bo góc riêng của từng khu vực). */
+    fun themeScanStyle(ctx: Context): PanelStyle = ThemeStore.load(ctx).current()?.scan ?: PanelStyle()
+
+    /** Kiểu nút của một khu vực: theo giao diện, riêng bo góc lấy theo bộ thông số của khu vực nếu người dùng đã đặt. */
+    fun btnStyle(base: PanelStyle, lay: ScanLayout, area: Int): PanelStyle {
+        val c = lay.styleOf(area).cornerDp
+        return if (c >= 0) base.copy(cornerDp = c) else base
     }
 
     /**
-     * Một nút cỡ chuẩn [sizeDp] đã áp đúng giao diện thật (nền, bo góc, màu biểu tượng, ảnh riêng nếu có).
-     * Dùng cho danh sách chọn nút, khung chỉnh nút và hình minh họa hướng dẫn: nhìn giống hệt nút trên bàn phím.
+     * Một nút cỡ chuẩn [sizeDp] đã áp đúng giao diện thật (nền, bo góc của khu vực chứa nó, màu biểu tượng, ảnh riêng).
+     * Dùng cho danh sách chọn nút, khung chỉnh nút và hình minh họa hướng dẫn. [base] là kiểu nút của giao diện.
      */
-    fun tile(ctx: Context, lay: ScanLayout, key: String, sizeDp: Int, st: PanelStyle): ImageView {
+    fun tile(ctx: Context, lay: ScanLayout, key: String, sizeDp: Int, base: PanelStyle): ImageView {
+        val area = lay.areaOf(key)
+        val ts = AreaStyle(perRow = 1, widthDp = sizeDp, heightDp = sizeDp, scale = 100, cornerDp = lay.styleOf(area).cornerDp)
         val t = lay.copy(
-            widthDp = sizeDp, heightDp = sizeDp, scale = 100, perRowTop = 1, perRowBottom = 1,
+            topStyle = ts, bottomStyle = ts, toolsStyle = ts,
             buttons = lay.buttons.mapValues { (_, c) -> c.copy(scale = 100, imgW = 0, imgH = 0) }
         )
         val iv = makeButton(ctx, t, key)
-        ThemeRender.styleButton(ctx, iv, st, if (ScanLayout.isToggle(key)) ThemeRender.Kind.TOGGLE else ThemeRender.Kind.NORMAL, hasCustomImage(ctx, t, key))
+        ThemeRender.styleButton(ctx, iv, btnStyle(base, lay, area), if (ScanLayout.isToggle(key)) ThemeRender.Kind.TOGGLE else ThemeRender.Kind.NORMAL, hasCustomImage(ctx, t, key))
         // Ô nút chỉ để xem: không nhận chạm riêng, để chạm vào giữa nút cũng chọn được dòng / ô chứa nó
         iv.isClickable = false
         iv.isFocusable = false
@@ -420,7 +505,7 @@ object ScanButtons {
      * Dựng toàn bộ nút theo bố cục [lay] với kiểu [st]: tạo nút, áp giao diện, xếp hàng trên và hàng dưới.
      * Bàn phím thật và các bản xem trước đều gọi hàm này nên hình dạng, kích thước, khoảng cách giống nhau tuyệt đối.
      */
-    fun assemble(ctx: Context, lay: ScanLayout, st: PanelStyle): Assembled {
+    fun assemble(ctx: Context, lay: ScanLayout, base: PanelStyle): Assembled {
         forgetBitmaps()
         val m = makeAll(ctx, lay)
         val custom = HashSet<String>()
@@ -428,17 +513,40 @@ object ScanButtons {
             val hasImg = hasCustomImage(ctx, lay, k)
             if (hasImg) custom.add(k)
             ThemeRender.styleButton(
-                ctx, b, st,
+                ctx, b, btnStyle(base, lay, lay.areaOf(k)),
                 if (ScanLayout.isToggle(k)) ThemeRender.Kind.TOGGLE else ThemeRender.Kind.NORMAL,
                 hasImg
             )
         }
-        val top = buildRows(ctx, lay, m, lay.top, lay.perRowTop)
-        val bottom = buildRows(ctx, lay, m, lay.bottom, lay.perRowBottom)
+        val top = buildRows(ctx, lay, m, lay.top, ScanLayout.AREA_TOP)
+        val bottom = buildRows(ctx, lay, m, lay.bottom, ScanLayout.AREA_BOTTOM)
         return Assembled(
             m, custom, top, bottom,
             lay.top.mapNotNull { m[it] }, lay.bottom.mapNotNull { m[it] }, lay.tools.mapNotNull { m[it] }
         )
+    }
+
+    /** Khoảng cách phía trên / dưới của hàng trên và hàng dưới theo bộ thông số của từng khu vực. */
+    fun applyAreaPads(ctx: Context, lay: ScanLayout, topArea: View, btnArea: View, gapBelowCamera: View) {
+        val d = ctx.resources.displayMetrics.density
+        topArea.setPadding(0, (lay.topStyle.padTopDp * d).toInt(), 0, (lay.topStyle.padBottomDp * d).toInt())
+        btnArea.setPadding(0, 0, 0, (lay.bottomStyle.padBottomDp * d).toInt())
+        gapBelowCamera.layoutParams = gapBelowCamera.layoutParams.apply { height = (lay.bottomStyle.padTopDp * d).toInt() }
+    }
+
+    /**
+     * Vị trí ngang (px) của bảng Công cụ nổi. [btnCenterX] là tâm nút Công cụ, [containerW] là bề rộng vùng chứa,
+     * [panelW] là bề rộng bảng. Bàn phím thật và bản xem trước dùng chung hàm này nên luôn trùng khớp.
+     */
+    fun toolsPanelX(st: AreaStyle, d: Float, btnCenterX: Int, panelW: Int, containerW: Int): Int {
+        val m = (8 * d).toInt()
+        val base = when (st.align) {
+            0 -> m
+            2 -> containerW - panelW - m
+            3 -> (containerW - panelW) / 2
+            else -> btnCenterX - panelW / 2
+        }
+        return (base + (st.offsetXDp * d).toInt()).coerceIn(m, (containerW - panelW - m).coerceAtLeast(m))
     }
 
     /** Khung của nhóm Công cụ (nền, đệm, cuộn ngang). Trả về khung ngoài và hàng nút bên trong. */
@@ -458,16 +566,9 @@ object ScanButtons {
         return Pair(box, row)
     }
 
-    /** Xếp các nút công cụ vào hàng của bảng Công cụ (cách nhau 3dp như bàn phím thật). */
-    fun fillTools(ctx: Context, row: LinearLayout, buttons: Map<String, ImageView>, keys: List<String>) {
-        val d = ctx.resources.displayMetrics.density
-        for (k in keys) {
-            val b = buttons[k] ?: continue
-            (b.parent as? ViewGroup)?.removeView(b)
-            row.addView(b, LinearLayout.LayoutParams(b.layoutParams.width, b.layoutParams.height).apply {
-                setMargins((3 * d).toInt(), 0, (3 * d).toInt(), 0)
-            })
-        }
+    /** Xếp các nút công cụ vào bảng Công cụ theo bộ thông số riêng của nhóm (số nút mỗi hàng, kích thước, khoảng cách...). */
+    fun fillTools(ctx: Context, holder: LinearLayout, lay: ScanLayout, buttons: Map<String, ImageView>) {
+        holder.addView(buildRows(ctx, lay, buttons, lay.tools, ScanLayout.AREA_TOOLS))
     }
 
     fun makeAll(ctx: Context, lay: ScanLayout): Map<String, ImageView> =

@@ -100,7 +100,7 @@ private class GuideBuilder(private val a: Activity, private val host: LinearLayo
 
     private val lay = ScanLayout.fromJson(Prefs(a).scanLayoutJson)
     private val theme = ThemeStore.load(a).current()
-    private val scanSt = ScanButtons.styleFor(a, lay)
+    private val scanSt = ScanButtons.themeScanStyle(a)
     private val kbSt = theme?.kb ?: PanelStyle()
     private val space = theme?.space ?: SpaceStyle()
 
@@ -118,9 +118,9 @@ private class GuideBuilder(private val a: Activity, private val host: LinearLayo
 
     // ------------------------------------------------------------------ thành phần dùng chung
     /** Nút thật (đúng giao diện hiện tại) kèm nhãn nhỏ phía dưới. */
-    private fun labeled(key: String, size: Int, cellW: Int, label: String? = null, selected: Boolean = false, st: PanelStyle = scanSt): LinearLayout {
+    private fun labeled(key: String, size: Int, cellW: Int, label: String? = null, selected: Boolean = false, st: PanelStyle = scanSt, l: ScanLayout = lay): LinearLayout {
         val cell = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
-        val t = ScanButtons.tile(a, lay, key, size, st)
+        val t = ScanButtons.tile(a, l, key, size, st)
         t.isSelected = selected
         cell.addView(t, lp(dp(size), dp(size)))
         cell.addView(text(label ?: shortNames[key] ?: key, 8.5f, col(R.color.muted)).apply { gravity = Gravity.CENTER; maxLines = 2 },
@@ -460,7 +460,7 @@ private class GuideBuilder(private val a: Activity, private val host: LinearLayo
         group(6, "TÙY CHỈNH VÀ CHIA SẺ", "Giao diện, nút Scan, xuất / nhập")
         item(
             "Giao diện bàn phím",
-            "• Tám tab: Phím, Nền, Chữ, Chạm, Sáng, Động, Bố cục và Space, xem trước ngay phía trên.\n" +
+            "• Bảng Scan và Bảng Bàn phím tùy chỉnh độc lập: mỗi bảng có các tab Phím, Nền, Chữ, Chạm, Sáng, Động, Bố cục (Space chỉ có ở Bàn phím).\n" +
                 "• Lưu được nhiều giao diện và đổi qua lại.\n" +
                 "• Thanh trượt nào cũng có nút − / + và rung nhẹ khi đổi giá trị.",
             null,
@@ -486,7 +486,7 @@ private class GuideBuilder(private val a: Activity, private val host: LinearLayo
         item(
             "Tùy chỉnh nút Scan",
             "• Ba khu vực: Hàng trên, Hàng dưới và Công cụ. Kéo ≡ để đổi thứ tự, bấm ⇄ để chuyển nút sang khu vực khác.\n" +
-                "• Mỗi hàng tối đa 10 nút; chỉnh kích thước, căn lề, bo góc và khoảng cách giữa các hàng.\n" +
+                "• Hàng trên, Hàng dưới, Nhóm Công cụ có bộ thông số riêng, độc lập nhau: số nút mỗi hàng (tối đa 10), kích thước, bo góc, khoảng cách, căn lề, vị trí.\n" +
                 "• Khung xem trước được ghim cố định phía trên và đồng bộ ngay khi chỉnh; nó dựng bằng chính mã của bàn phím thật nên khớp 100% khi áp dụng.\n" +
                 "• Mọi thay đổi tự lưu và áp dụng ngay cho bàn phím.\n" +
                 "• Chạm một nút ở mục Chỉnh sửa nút để thêm hình ảnh PNG riêng cho nút đó.",
@@ -501,13 +501,13 @@ private class GuideBuilder(private val a: Activity, private val host: LinearLayo
         )
         item(
             "Bo góc nút đồng bộ",
-            "• Thanh Bo góc nút áp dụng cho mọi nút ở cả ba khu vực, nên giao diện luôn đồng bộ.\n" +
+            "• Mỗi nhóm có thanh Bo góc nút riêng; đặt cùng giá trị cho các nhóm để giao diện đồng bộ.\n" +
                 "• Kéo về 0 để nút vuông góc, tăng lên để bo tròn.\n" +
                 "• Mức \"theo giao diện\" giữ bo góc của giao diện đang dùng.",
             null,
             LinearLayout(a).apply {
                 orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER
-                for (c in listOf(0, 8, 16, 30)) addView(labeled("cam", 48, 62, "$c dp", st = scanSt.copy(cornerDp = c)), lp(dp(62), WRAP))
+                for (c in listOf(0, 8, 16, 30)) addView(labeled("cam", 48, 62, "$c dp", l = lay.withCorner(c)), lp(dp(62), WRAP))
             }
         )
         item(

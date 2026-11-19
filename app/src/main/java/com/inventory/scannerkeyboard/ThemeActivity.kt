@@ -30,7 +30,7 @@ import java.io.FileOutputStream
 import kotlin.math.min
 
 /**
- * Màn hình "Tùy chỉnh giao diện": chọn phạm vi (Scan / Bàn phím / Cả hai), chỉnh phím, nền, chữ với
+ * Màn hình "Tùy chỉnh giao diện": chọn bảng cần chỉnh (Scan hoặc Bàn phím, hai bảng độc lập), chỉnh phím, nền, chữ với
  * xem trước trực tiếp, lưu nhiều giao diện (đặt tên, nhân bản, chuyển đổi, xóa), khôi phục mặc định.
  * Mọi thay đổi được lưu ngay; bàn phím dùng giao diện mới ở lần hiện kế tiếp.
  */
@@ -39,7 +39,9 @@ class ThemeActivity : Activity() {
     private lateinit var prefs: Prefs
     private lateinit var state: ThemeState
 
-    private var scope = -1   // -1 chưa chọn, 0 bảng Scan, 1 bảng Bàn phím, 2 cả hai
+    private var panel = 0   // bảng đang chỉnh: 0 bảng Scan, 1 bảng Bàn phím. Hai bảng độc lập hoàn toàn
+    private lateinit var scroll: StableScrollView
+    private var previewScale = 0f   // tỉ lệ thu nhỏ của xem trước, giữ cố định giữa các lần dựng
     private var group = 0    // 0 phím, 1 nền, 2 chữ, 3 chạm, 4 ánh sáng, 5 chuyển động nền, 6 bố cục, 7 phím Space
 
     private lateinit var previewHost: LinearLayout
@@ -75,14 +77,14 @@ class ThemeActivity : Activity() {
     private fun cur(): KbTheme = state.current()!!
 
     /** Giá trị hiển thị trên thanh trượt: bảng Scan thì lấy của Scan, còn lại lấy của Bàn phím. */
-    private fun viewStyle(): PanelStyle = if (scope == 0) cur().scan else cur().kb
+    private fun viewStyle(): PanelStyle = if (panel == 0) cur().scan else cur().kb
 
-    /** Áp một thay đổi lên (các) bảng đang được chọn phạm vi, lưu ngay và cập nhật xem trước. */
+    /** Áp một thay đổi CHỈ lên bảng đang chỉnh (Scan hoặc Bàn phím), lưu ngay và cập nhật xem trước. */
     private fun edit(f: (PanelStyle) -> PanelStyle) {
         val t = cur()
         val nt = t.copy(
-            scan = if (scope == 0 || scope == 2) f(t.scan) else t.scan,
-            kb = if (scope == 1 || scope == 2) f(t.kb) else t.kb
+            scan = if (panel == 0) f(t.scan) else t.scan,
+            kb = if (panel == 1) f(t.kb) else t.kb
         )
         state = state.copy(themes = state.themes.map { if (it.id == nt.id) nt else it })
         ThemeStore.save(this, state)
@@ -108,7 +110,8 @@ class ThemeActivity : Activity() {
         previewHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(col(R.color.bg)) }
         root.addView(previewHost, lp(MATCH, WRAP))
 
-        val sv = ScrollView(this).apply { isFillViewport = true }
+        val sv = StableScrollView(this).apply { isFillViewport = true }
+        scroll = sv
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(4), dp(16), dp(24)) }
         sv.addView(content, ViewGroup.LayoutParams(MATCH, WRAP))
         root.addView(sv, lp(MATCH, 0).apply { weight = 1f })
@@ -123,20 +126,16 @@ class ThemeActivity : Activity() {
             askName("Giao diện mới", "Giao diện ${state.themes.size + 1}") { addTheme(it, null) }
         }, lp(MATCH, dp(44)).apply { topMargin = dp(10) })
 
-        // --- Phạm vi ---
-        val sc = card(content, "PHẠM VI ÁP DỤNG")
-        sc.addView(TextView(this).apply {
-            text = "Chọn phạm vi trước khi chỉnh sửa. Chọn \"Cả hai bảng\" để mỗi thay đổi áp dụng đồng thời cho Scan và Bàn phím."
-            textSize = 12f; setTextColor(col(R.color.muted)); setPadding(0, dp(4), 0, 0)
-        })
-        chips(sc, listOf("Bảng Scan", "Bảng Bàn phím", "Cả hai bảng"), 3, { scope }) {
-            scope = it
+        // --- Chỉnh sửa ---
+        val ed = card(content, "CHỈNH SỬA")
+        note(ed, "Bảng Scan và Bảng Bàn phím có hệ thống tùy chỉnh riêng, độc lập nhau: chọn bảng cần chỉnh, thay đổi chỉ áp dụng cho bảng đó.")
+        chips(ed, listOf("BẢNG SCAN", "BẢNG BÀN PHÍM"), 2, { panel }) {
+            panel = it
+            if (panel == 0 && group == 7) group = 0      // phím Space chỉ thuộc bảng Bàn phím
+            previewScale = 0f
             rebuildEditor()
             refreshPreview()
         }
-
-        // --- Chỉnh sửa ---
-        val ed = card(content, "CHỈNH SỬA")
         tabsBox = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         val tabScroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
         tabScroll.addView(tabsBox, ViewGroup.LayoutParams(WRAP, WRAP))
@@ -278,16 +277,18 @@ class ThemeActivity : Activity() {
         bar.addView(TextView(this).apply {
             text = if (previewBig) "THU NHỎ" else "PHÓNG TO"; textSize = 10f; setTextColor(col(R.color.text)); setTypeface(null, Typeface.BOLD)
             setBackgroundResource(R.drawable.bg_toggle); setPadding(dp(10), dp(5), dp(10), dp(5)); isClickable = true
-            setOnClickListener { previewBig = !previewBig; refreshPreview() }
+            setOnClickListener { previewBig = !previewBig; previewScale = 0f; refreshPreview() }
         })
         previewHost.addView(bar)
-        // Chưa chọn phạm vi thì hiện cả hai bảng; phím Space thuộc bảng Gõ phím.
+        // Khung xem trước có chiều cao CỐ ĐỊNH: không nhảy khi thay đổi thông số
+        val frameH = (dm.heightPixels * (if (previewBig) 0.45f else 0.30f)).toInt()
         val opts = KbPreview.Opts(
-            scan = scope != 1 && group != 7, type = scope != 0 || group == 7,
-            maxHeightPx = (dm.heightPixels * (if (previewBig) 0.6f else 0.36f)).toInt()
+            scan = panel == 0, type = panel == 1,
+            maxHeightPx = frameH, frameHeightPx = frameH, fixedScale = previewScale,
+            onScale = { previewScale = it }
         )
         val v = KbPreview.build(this, opts, ScanLayout.fromJson(prefs.scanLayoutJson), t, dm.widthPixels)
-        previewHost.addView(v, lp(MATCH, WRAP))
+        previewHost.addView(v, lp(MATCH, frameH))
     }
 
     private fun refreshList() {
@@ -315,18 +316,22 @@ class ThemeActivity : Activity() {
     }
 
     private fun rebuildEditor() {
+        scroll.keepScroll { rebuildEditorImpl() }
+    }
+
+    private fun rebuildEditorImpl() {
         tabsBox.removeAllViews()
         editorBox.removeAllViews()
-        if (scope < 0) {
-            note(editorBox, "Hãy chọn phạm vi áp dụng ở trên để bắt đầu chỉnh sửa.")
-            Fonts.apply(editorBox)
-            return
-        }
-        val names = listOf("Phím", "Nền", "Chữ", "Chạm", "Sáng", "Động", "Bố cục", "Space")
-        val icons = listOf(
+        val allNames = listOf("Phím", "Nền", "Chữ", "Chạm", "Sáng", "Động", "Bố cục", "Space")
+        val allIcons = listOf(
             R.drawable.ic_keyboard, R.drawable.ic_palette, R.drawable.ic_tune, R.drawable.ic_sparkle,
             R.drawable.ic_sun, R.drawable.ic_motion, R.drawable.ic_layout, R.drawable.ic_space
         )
+        // Phím Space chỉ có ở bảng Bàn phím
+        val count = if (panel == 1) allNames.size else allNames.size - 1
+        val names = allNames.take(count)
+        val icons = allIcons.take(count)
+        if (group >= count) group = 0
         names.forEachIndexed { i, n ->
             val t = TextView(this).apply {
                 text = n; textSize = 12f; gravity = Gravity.CENTER; setTextColor(col(R.color.text))
@@ -357,8 +362,8 @@ class ThemeActivity : Activity() {
 
     // ------------------------------------------------------------------ Nhóm 1: phím
     private fun buildKeys(g: LinearLayout) {
-        note(g, "Chạm vào giá trị bên cạnh tên để nhập số chính xác. Phạm vi hiện tại: " + scopeName() + ".")
-        if (scope != 0) {
+        note(g, "Chạm vào giá trị bên cạnh tên để nhập số chính xác. Đang chỉnh: " + scopeName() + ".")
+        if (panel == 1) {
             seekGeneric(g, "Chiều cao hàng phím", 36, 72, "dp", { prefs.keyRowDp }) { prefs.keyRowDp = it; refreshPreview() }
             seek(g, "Khoảng cách giữa các phím", 0, 10, "dp", { it.gapDp }) { s, v -> s.copy(gapDp = v) }
         } else note(g, "Khoảng cách phím và chiều cao hàng chỉ áp dụng cho bảng Bàn phím. Hàng nút Scan chỉnh ở \"Tùy chỉnh nút Scan\".")
@@ -422,7 +427,7 @@ class ThemeActivity : Activity() {
 
     // ------------------------------------------------------------------ Nhóm 3: font chữ
     private fun buildFont(g: LinearLayout) {
-        note(g, "Phạm vi hiện tại: " + scopeName() + ". Bảng Scan chỉ có dòng trạng thái và biểu tượng nên chữ tác động chủ yếu lên bảng Bàn phím.")
+        note(g, "Đang chỉnh: " + scopeName() + ". Bảng Scan chỉ có dòng trạng thái và biểu tượng nên chữ tác động chủ yếu lên bảng Bàn phím.")
         label(g, "Kiểu font", 10)
         chips(g, ThemeRender.FAMILY_NAMES, 4, { viewStyle().fontFamily }) { i -> edit { it.copy(fontFamily = i) } }
         seek(g, "Độ đậm / mảnh", 300, 800, "", { it.fontWeight }) { s, v -> s.copy(fontWeight = v) }
@@ -459,7 +464,7 @@ class ThemeActivity : Activity() {
 
     // ------------------------------------------------------------------ Nhóm 4: hiệu ứng khi chạm và gõ
     private fun buildTouch(g: LinearLayout) {
-        note(g, "Mỗi hiệu ứng có công tắc riêng, bật bao nhiêu cũng được. Bạn có thể chạm thử vào các phím ở khung xem trước phía trên. Phạm vi hiện tại: " + scopeName() + ".")
+        note(g, "Mỗi hiệu ứng có công tắc riêng, bật bao nhiêu cũng được. Bạn có thể chạm thử vào các phím ở khung xem trước phía trên. Đang chỉnh: " + scopeName() + ".")
         switchRow(g, "Nhún phím", "Phím co lại một chút khi chạm.", true, { it.fxBounce }) { s, on -> s.copy(fxBounce = on) }
         if (viewStyle().fxBounce) {
             seek(g, "Mức nhún", 80, 100, "%", { it.fxBounceScale }) { s, v -> s.copy(fxBounceScale = v) }
@@ -476,7 +481,7 @@ class ThemeActivity : Activity() {
 
     // ------------------------------------------------------------------ Nhóm 6: ánh sáng và màu sắc
     private fun buildLight(g: LinearLayout) {
-        note(g, "Có thể bật nhiều kiểu cùng lúc. Màu viền lấy theo thứ tự ưu tiên Rainbow, RGB, Gradient, rồi tới màu bạn chọn. Neon và Glow quyết định kiểu quầng sáng; Lan tỏa là lớp ánh sáng nền. Hiệu ứng chỉ chạy khi bàn phím đang hiện. Phạm vi hiện tại: " + scopeName() + ".")
+        note(g, "Có thể bật nhiều kiểu cùng lúc. Màu viền lấy theo thứ tự ưu tiên Rainbow, RGB, Gradient, rồi tới màu bạn chọn. Neon và Glow quyết định kiểu quầng sáng; Lan tỏa là lớp ánh sáng nền. Hiệu ứng chỉ chạy khi bàn phím đang hiện. Đang chỉnh: " + scopeName() + ".")
         lightSwitch(g, "RGB", "Viền đổi màu liên tục, tất cả phím cùng một màu.", FxDrawable.RGB)
         lightSwitch(g, "Rainbow", "Dải màu cầu vồng chạy ngang các phím.", FxDrawable.RAINBOW)
         lightSwitch(g, "Gradient", "Chuyển màu mượt giữa hai màu bạn chọn.", FxDrawable.GRADIENT)
@@ -501,7 +506,7 @@ class ThemeActivity : Activity() {
 
     // ------------------------------------------------------------------ Nhóm 5: hiệu ứng chuyển động nền
     private fun buildMotion(g: LinearLayout) {
-        note(g, "Hiệu ứng nằm phía sau phím, không che chữ. Bật riêng từng cái và kết hợp tự do. Nhiều hiệu ứng cùng lúc sẽ tốn pin hơn; ứng dụng tự giảm số hạt nếu máy vẽ chậm. Phạm vi hiện tại: " + scopeName() + ".")
+        note(g, "Hiệu ứng nằm phía sau phím, không che chữ. Bật riêng từng cái và kết hợp tự do. Nhiều hiệu ứng cùng lúc sẽ tốn pin hơn; ứng dụng tự giảm số hạt nếu máy vẽ chậm. Đang chỉnh: " + scopeName() + ".")
         motionSwitch(g, "Sao băng", "Vệt sao băng vụt qua.", MotionBgDrawable.SHOOTING)
         motionSwitch(g, "Đom đóm", "Đốm sáng xanh vàng chập chờn bay lượn.", MotionBgDrawable.FIREFLY)
         motionSwitch(g, "Bong bóng nước", "Bong bóng trong suốt nổi lên.", MotionBgDrawable.BUBBLE)
@@ -522,8 +527,8 @@ class ThemeActivity : Activity() {
 
     // ------------------------------------------------------------------ Nhóm 7: bố cục và vị trí
     private fun buildLayout(g: LinearLayout) {
-        note(g, "Phạm vi hiện tại: " + scopeName() + ". Khung xem trước phía trên thể hiện đúng chiều rộng, căn lề và vị trí bạn chọn.")
-        if (scope != 0) {
+        note(g, "Đang chỉnh: " + scopeName() + ". Khung xem trước phía trên thể hiện đúng chiều rộng, căn lề và vị trí bạn chọn.")
+        if (panel == 1) {
             seekGeneric(g, "Chiều cao hàng phím", 36, 72, "dp", { prefs.keyRowDp }) { prefs.keyRowDp = it; refreshPreview() }
             seek(g, "Khoảng cách giữa các phím", 0, 10, "dp", { it.gapDp }) { s, v -> s.copy(gapDp = v) }
         }
@@ -579,7 +584,7 @@ class ThemeActivity : Activity() {
 
     private fun buildSpace(g: LinearLayout) {
         val sp = cur().space
-        note(g, "Phím Space nằm ở hàng dưới của bảng Bàn phím. Phần này áp dụng cho giao diện \"${cur().name}\", không phụ thuộc phạm vi đã chọn ở trên. Khung xem trước phía trên thể hiện đúng phím Space.")
+        note(g, "Phím Space nằm ở hàng dưới của bảng Bàn phím. Phần này chỉ thuộc bảng Bàn phím và áp dụng cho giao diện \"${cur().name}\". Khung xem trước phía trên thể hiện đúng phím Space.")
 
         label(g, "CHỨC NĂNG", 12)
         switchPick(g, "Vuốt để di chuyển con trỏ", "Đặt ngón tay lên phím Space rồi vuốt trái / phải để dịch con trỏ trong ô nhập.", true,
@@ -656,7 +661,7 @@ class ThemeActivity : Activity() {
         }, lp(MATCH, dp(44)).apply { topMargin = dp(18) })
     }
 
-    private fun scopeName() = when (scope) { 0 -> "bảng Scan"; 1 -> "bảng Bàn phím"; else -> "cả hai bảng" }
+    private fun scopeName() = if (panel == 0) "bảng Scan" else "bảng Bàn phím"
 
     // ------------------------------------------------------------------ quản lý giao diện
     private fun askName(title: String, initial: String, onOk: (String) -> Unit) {
@@ -712,10 +717,6 @@ class ThemeActivity : Activity() {
     }
 
     private fun confirmReset() {
-        if (scope < 0) {
-            Toast.makeText(this, "Hãy chọn phạm vi áp dụng trước.", Toast.LENGTH_SHORT).show()
-            return
-        }
         AlertDialog.Builder(this)
             .setTitle("Khôi phục mặc định?")
             .setMessage("Các tùy chỉnh phím, nền và chữ của " + scopeName() + " trong giao diện \"" + cur().name +
@@ -723,7 +724,7 @@ class ThemeActivity : Activity() {
             .setNegativeButton("Hủy", null)
             .setPositiveButton("Khôi phục") { _, _ ->
                 edit { PanelStyle() }
-                if (scope != 0) prefs.keyRowDp = 50
+                if (panel == 1) prefs.keyRowDp = 50
                 ThemeStore.cleanupImages(this, state)
                 ThemeImages.forget()
                 rebuildEditor()

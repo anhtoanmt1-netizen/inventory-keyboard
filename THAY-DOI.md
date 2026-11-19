@@ -53,6 +53,15 @@ và toàn bộ giá trị độ nhạy đều giữ nguyên từng dòng. Các f
 ## Sửa lỗi build (2.3.1)
 - ScannerKeyboardService.kt: khi chuyển bàn phím sang mã dựng chung, mình đã xóa nhầm các hàm finishComposing, handleDelete, type, typeChar, telexKey, toggleShift và khai báo keyBinder (lỗi "Unresolved reference"). Đã khôi phục từ bản gốc và đối chiếu lại toàn bộ lời gọi hàm.
 
+## Đợt tách độc lập và ổn định (bản 2.4)
+1. **Giao diện bàn phím**: bỏ hẳn mục "Phạm vi áp dụng" (kể cả "Cả hai bảng"). Bảng Scan và Bảng Bàn phím là hai hệ thống tùy chỉnh riêng (chọn bằng hai nút BẢNG SCAN / BẢNG BÀN PHÍM); mỗi bảng giữ đủ các tab và giá trị cũ (Phím, Nền, Chữ, Chạm, Sáng, Động, Bố cục; Space chỉ có ở Bàn phím). Thay đổi ở bảng nào chỉ áp dụng cho bảng đó.
+2. **Ổn định ở Tùy chỉnh nút Scan**:
+   - Khung xem trước có chiều cao CỐ ĐỊNH và tỉ lệ thu nhỏ cố định (chỉ thu thêm khi nội dung vượt khung), nên không nhảy và không đẩy vùng điều chỉnh khi đổi thông số.
+   - Vùng điều chỉnh dùng ScrollView ổn định: không tự cuộn / trượt lên khi dựng lại nội dung hay khi thanh trượt nhận tiêu điểm; mọi lần dựng lại đều giữ nguyên vị trí cuộn.
+   - Nếu dựng xem trước gặp lỗi, khung vẫn giữ chỗ và báo lý do thay vì biến mất.
+3. **Bố cục chung tách thành 3 nhóm độc lập**: Hàng trên, Hàng dưới, Nhóm Công cụ, mỗi nhóm một bộ thông số riêng: số nút mỗi hàng (tối đa 10), chiều rộng / cao, thu phóng, bo góc, khoảng cách ngang, khoảng cách giữa các hàng, căn lề, căn theo cột (hàng trên / dưới), khoảng cách phía trên và phía dưới, dịch ngang; riêng Nhóm Công cụ có vị trí ngang (sát trái / theo nút / sát phải / giữa) và khoảng cách tới mép trên bàn phím. Có nút đặt lại riêng từng nhóm. Cài đặt bố cục cũ được tự chuyển sang bộ thông số mới, giao diện giữ nguyên.
+4. Bàn phím thật và khung xem trước vẫn dùng chung mã dựng nên khớp 100% với ba bộ thông số mới (kể cả vị trí bảng Công cụ nổi).
+
 ## Lưu ý
 - Hàng trên có thêm nút Clipboard (danh sách yêu cầu không nhắc, nhưng bỏ đi sẽ mất chức năng hiện có).
 - Phiên bản này chưa được biên dịch hay chạy thử trong môi trường soạn thảo (không có Android SDK). Hãy build bằng GitHub Actions và thử các mục ở trên.

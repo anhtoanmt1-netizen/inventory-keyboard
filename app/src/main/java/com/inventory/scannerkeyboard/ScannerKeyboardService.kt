@@ -89,7 +89,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     private var toolsPopupFailed = false            // máy không hiển thị đúng cửa sổ nổi: dùng phương án dự phòng
     private lateinit var gapBelowCamera: View        // khoảng trống giữa khung camera và hàng dưới
     private var toolsInline = false                  // phương án dự phòng: hiện ngay trong bàn phím nếu máy không cho cửa sổ nổi
-    private var btnCorner = -1                       // bo góc nút Scan (dp) do người dùng chọn; -1 = theo giao diện
+    private var curLay: ScanLayout = ScanLayout()    // bố cục nút đang dùng (mỗi khu vực có bộ thông số riêng)
     private lateinit var creditView: CreditView
     private var creditRaw = "\u0000"
     private var btnMap: Map<String, ImageView> = emptyMap()
@@ -539,8 +539,8 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     private fun rebuildScanButtons() {
         val json = prefs.scanLayoutJson
         val lay = ScanLayout.fromJson(json)
-        btnCorner = lay.cornerDp
-        val asm = ScanButtons.assemble(this, lay, btnStyle())
+        curLay = lay
+        val asm = ScanButtons.assemble(this, lay, styleScan)
         val m = asm.buttons
         btnMap = m
         customKeys = asm.custom
@@ -553,21 +553,24 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         scanButtonViews = asm.bottomViews
         toolViews = asm.toolViews
         toolKeys = lay.tools
-        // Khoảng cách giữa hàng trên - bàn phím / khung camera - hàng dưới
-        topArea.setPadding(0, 0, 0, dp(lay.gapTopBelowDp))
-        gapBelowCamera.layoutParams = gapBelowCamera.layoutParams.apply { height = dp(lay.gapBottomAboveDp) }
-        fxScan?.style = btnStyle(); fxTop?.style = btnStyle(); fxTools?.style = btnStyle()
+        // Khoảng cách phía trên / dưới của từng khu vực (mỗi khu vực có bộ thông số riêng)
+        ScanButtons.applyAreaPads(this, lay, topArea, btnArea, gapBelowCamera)
+        applyFxStyles()
         renderTools()
         layoutSig = json
         updateUi()
     }
 
     /** Kiểu của các nút Scan: theo giao diện, riêng bo góc có thể do người dùng chọn trong Tùy chỉnh nút Scan. */
-    private fun btnStyle(): PanelStyle = if (btnCorner >= 0) styleScan.copy(cornerDp = btnCorner) else styleScan
+    private fun applyFxStyles() {
+        fxTop?.style = ScanButtons.btnStyle(styleScan, curLay, ScanLayout.AREA_TOP)
+        fxScan?.style = ScanButtons.btnStyle(styleScan, curLay, ScanLayout.AREA_BOTTOM)
+        fxTools?.style = ScanButtons.btnStyle(styleScan, curLay, ScanLayout.AREA_TOOLS)
+    }
 
     /** Nút đang nằm trong nhóm Công cụ: dùng xong thì nhóm tự thu lại. */
     private fun afterToolUse(key: String) {
-        if (btnMap[key]?.parent === toolsRow) closeFlyoutSoon()
+        if (key in toolKeys) closeFlyoutSoon()
     }
 
     private fun bindButtons(m: Map<String, ImageView>) {
@@ -619,7 +622,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         if (!::toolsRow.isInitialized) return
         toolsRow.removeAllViews()
         if (toolsMode == 1) { renderSoundPicker(); return }
-        ScanButtons.fillTools(this, toolsRow, btnMap, toolKeys)
+        ScanButtons.fillTools(this, toolsRow, curLay, btnMap)
         if (toolViews.isEmpty()) {
             toolsRow.addView(TextView(this).apply {
                 text = "Nhóm Công cụ đang trống. Thêm nút trong Tùy chỉnh nút Scan."
@@ -766,15 +769,16 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
             // Tọa độ của cửa sổ con tính theo cửa sổ bàn phím (không phải theo màn hình), nên nằm phía trên là giá trị âm.
             val rw = IntArray(2)
             r.getLocationInWindow(rw)
-            var x = dp(8)
+            var cx = r.width / 2
             val tb = btnMap["tools"]
             if (tb != null && tb.isAttachedToWindow) {
                 val tw = IntArray(2)
                 tb.getLocationInWindow(tw)
-                x = tw[0] + tb.width / 2 - w / 2
+                cx = tw[0] + tb.width / 2
             }
-            x = x.coerceIn(dp(8), (r.width - w - dp(8)).coerceAtLeast(dp(8)))
-            val y = rw[1] - h - dp(6)
+            // Vị trí theo bộ thông số riêng của nhóm Công cụ (cùng hàm với bản xem trước)
+            val x = ScanButtons.toolsPanelX(curLay.toolsStyle, resources.displayMetrics.density, cx, w, r.width)
+            val y = rw[1] - h - dp(curLay.toolsStyle.padBottomDp)
             val pw = PopupWindow(toolsBox, w, h, false)
             pw.isClippingEnabled = false     // cho phép nằm ngoài khung bàn phím
             pw.isTouchable = true
@@ -842,8 +846,8 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
         toolsBox.scaleY = 0.92f
         toolsBox.animate().alpha(1f).translationY(0f).scaleX(1f).scaleY(1f)
             .setDuration(190).setInterpolator(DecelerateInterpolator()).start()
-        for (i in 0 until toolsRow.childCount) {
-            val item = toolsRow.getChildAt(i)
+        val items: List<View> = if (toolsMode == 1) (0 until toolsRow.childCount).map { toolsRow.getChildAt(it) } else toolViews
+        items.forEachIndexed { i, item ->
             item.alpha = 0f
             item.animate().alpha(1f).setStartDelay(35L * i).setDuration(160).start()
         }
@@ -1199,9 +1203,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
 
     /** Nền của bảng Scan + font của dòng trạng thái / gợi ý (bảng Scan không có chữ nào khác). */
     private fun applyScanTheme() {
-        fxScan?.style = btnStyle()
-        fxTop?.style = btnStyle()
-        fxTools?.style = btnStyle()
+        applyFxStyles()
         if (!scanTextCaptured) {
             statusColor0 = tvStatus.currentTextColor
             hintColor0 = tvHint.currentTextColor

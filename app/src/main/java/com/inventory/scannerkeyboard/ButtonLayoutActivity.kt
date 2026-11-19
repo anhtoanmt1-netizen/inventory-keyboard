@@ -53,6 +53,10 @@ class ButtonLayoutActivity : Activity() {
     private lateinit var baseStyle: PanelStyle   // kiểu nút Scan của giao diện đang dùng (để xem trước đúng giao diện thật)
     private lateinit var tvDirty: TextView
     private lateinit var pinned: LinearLayout
+    private lateinit var scroll: StableScrollView
+    private lateinit var areaBox: LinearLayout
+    private var areaTab = 0                 // khu vực đang chỉnh bố cục: 0 hàng trên, 1 hàng dưới, 2 nhóm Công cụ
+    private var previewScale = 0f           // tỉ lệ thu nhỏ của xem trước, giữ cố định giữa các lần dựng
     private var previewBig = false
     private var previewPending = false
     private var theme: KbTheme? = null
@@ -75,7 +79,8 @@ class ButtonLayoutActivity : Activity() {
 
     // ------------------------------------------------------------------ dựng giao diện
     private fun buildUi(): View {
-        val sv = ScrollView(this).apply { setBackgroundColor(col(R.color.bg)); isFillViewport = true }
+        val sv = StableScrollView(this).apply { setBackgroundColor(col(R.color.bg)); isFillViewport = true }
+        scroll = sv
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(16), dp(16), dp(24)) }
         sv.addView(root, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
@@ -105,40 +110,22 @@ class ButtonLayoutActivity : Activity() {
         bar.addView(TextView(this).apply {
             text = "PHÓNG TO"; textSize = 10f; setTextColor(col(R.color.text)); setTypeface(null, android.graphics.Typeface.BOLD)
             setBackgroundResource(R.drawable.bg_toggle); setPadding(dp(10), dp(5), dp(10), dp(5)); isClickable = true
-            setOnClickListener { previewBig = !previewBig; text = if (previewBig) "THU NHỎ" else "PHÓNG TO"; refreshPreview() }
+            setOnClickListener { previewBig = !previewBig; previewScale = 0f; text = if (previewBig) "THU NHỎ" else "PHÓNG TO"; refreshPreview() }
         })
         pinned.addView(bar)
         previewHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(col(R.color.bg)) }
         pinned.addView(previewHost, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
-        // --- Bố cục chung ---
-        val g = card(root, "BỐ CỤC CHUNG")
-        seekRow(g, "Số nút mỗi hàng: hàng trên", 1, ScanLayout.MAX_PER_ROW, { cfg.perRowTop }, "") { cfg = cfg.copy(perRowTop = it); changed() }
-        seekRow(g, "Số nút mỗi hàng: hàng dưới", 1, ScanLayout.MAX_PER_ROW, { cfg.perRowBottom }, "") { cfg = cfg.copy(perRowBottom = it); changed() }
-        seekRow(g, "Chiều rộng nút", 32, 96, { cfg.widthDp }, "dp") { cfg = cfg.copy(widthDp = it); changed() }
-        seekRow(g, "Chiều cao nút", 32, 96, { cfg.heightDp }, "dp") { cfg = cfg.copy(heightDp = it); changed() }
-        seekRow(g, "Thu phóng chung", 60, 160, { cfg.scale }, "%") { cfg = cfg.copy(scale = it); changed() }
-        seekRow(g, "Bo góc nút", -1, 30, { cfg.cornerDp }, "dp", { v -> if (v < 0) "theo giao diện" else "$v dp" }) { cfg = cfg.copy(cornerDp = it); changed() }
+        // --- Bố cục và vị trí: ba nhóm độc lập (mỗi nhóm một bộ thông số riêng) ---
+        val g = card(root, "BỐ CỤC VÀ VỊ TRÍ")
         g.addView(TextView(this).apply {
-            text = "Kéo về 0 để nút vuông góc, tăng lên để bo tròn. Mức \"theo giao diện\" giữ nguyên bo góc của giao diện đang dùng. Áp dụng đồng bộ cho mọi nút ở hàng trên, hàng dưới và nhóm Công cụ."
-            textSize = 11f; setTextColor(col(R.color.muted)); setPadding(0, dp(2), 0, 0)
+            text = "Hàng trên, Hàng dưới và Nhóm Công cụ có bộ thông số riêng, độc lập nhau. Chọn một nhóm để chỉnh: thay đổi chỉ áp dụng cho nhóm đó và hiện ngay trên khung xem trước."
+            textSize = 12f; setTextColor(col(R.color.muted)); setPadding(0, dp(4), 0, dp(2))
         })
-        seekRow(g, "Khoảng cách ngang giữa các nút", 0, 24, { cfg.gapDp }, "dp") { cfg = cfg.copy(gapDp = it); changed() }
-        label(g, "Căn lề")
-        chips(g, listOf("Trái", "Giữa", "Phải", "Dàn đều", "Cách đều"), { cfg.align }) { cfg = cfg.copy(align = it); changed() }
-        label(g, "KHOẢNG CÁCH GIỮA CÁC HÀNG")
-        seekRow(g, "Hàng trên ↔ bàn phím / khung camera", 0, 24, { cfg.gapTopBelowDp }, "dp") { cfg = cfg.copy(gapTopBelowDp = it); changed() }
-        seekRow(g, "Bàn phím / khung camera ↔ hàng dưới", 0, 24, { cfg.gapBottomAboveDp }, "dp") { cfg = cfg.copy(gapBottomAboveDp = it); changed() }
-        seekRow(g, "Giữa các hàng nút trong cùng một khu vực", 0, 24, { cfg.rowGapDp }, "dp") { cfg = cfg.copy(rowGapDp = it); changed() }
-        val gridRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        gridRow.addView(LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(TextView(this@ButtonLayoutActivity).apply { text = "Căn theo cột (lưới)"; textSize = 14f; setTextColor(col(R.color.text)); setTypeface(null, android.graphics.Typeface.BOLD) })
-            addView(TextView(this@ButtonLayoutActivity).apply { text = "Bật: các nút thẳng cột với nhau giữa các hàng. Tắt: mỗi hàng tự căn riêng (Dàn đều / Cách đều chỉ có tác dụng khi tắt)."; textSize = 12f; setTextColor(col(R.color.muted)) })
-        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        val sw = Switch(this).apply { isChecked = cfg.grid; setOnCheckedChangeListener { _, on -> cfg = cfg.copy(grid = on); changed() } }
-        gridRow.addView(sw)
-        g.addView(gridRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(12) })
+        chips(g, listOf("HÀNG TRÊN", "HÀNG DƯỚI", "NHÓM CÔNG CỤ"), { areaTab }) { areaTab = it; rebuildAreaBox() }
+        areaBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        g.addView(areaBox)
+        rebuildAreaBox()
 
         // --- Danh sách nút: ba khu vực ---
         val l = card(root, "DANH SÁCH NÚT")
@@ -269,13 +256,98 @@ class ButtonLayoutActivity : Activity() {
     }
 
     /** Kiểu nút dùng cho xem trước và danh sách: giao diện đang dùng, kèm bo góc người dùng đang chọn. */
-    private fun tileStyle(): PanelStyle = if (cfg.cornerDp >= 0) baseStyle.copy(cornerDp = cfg.cornerDp) else baseStyle
+    /** Kiểu nút của giao diện đang dùng; bo góc riêng của từng khu vực được áp khi dựng từng nút. */
+    private fun tileStyle(): PanelStyle = baseStyle
 
     private fun refreshAll() {
         refreshList()
         refreshPicker()
         refreshEditor()
         changed()
+    }
+
+    private fun rebuildAreaBox() {
+        scroll.keepScroll {
+            areaBox.removeAllViews()
+            buildAreaSettings(areaBox, areaTab)
+            Fonts.apply(areaBox)
+        }
+    }
+
+    private fun editStyle(area: Int, f: (AreaStyle) -> AreaStyle) {
+        cfg = cfg.withStyle(area, f(cfg.styleOf(area)))
+        changed()
+    }
+
+    private fun switchRow(parent: LinearLayout, title: String, desc: String, get: () -> Boolean, set: (Boolean) -> Unit) {
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        row.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(TextView(this@ButtonLayoutActivity).apply { text = title; textSize = 14f; setTextColor(col(R.color.text)); setTypeface(null, android.graphics.Typeface.BOLD) })
+            addView(TextView(this@ButtonLayoutActivity).apply { text = desc; textSize = 12f; setTextColor(col(R.color.muted)) })
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(Switch(this).apply { isChecked = get(); setOnCheckedChangeListener { _, on -> set(on) } })
+        parent.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(12) })
+    }
+
+    /** Toàn bộ thông số bố cục và vị trí của MỘT khu vực; không ảnh hưởng hai khu vực còn lại. */
+    private fun buildAreaSettings(g: LinearLayout, a: Int) {
+        val tools = a == ScanLayout.AREA_TOOLS
+        fun st() = cfg.styleOf(a)
+        g.addView(TextView(this).apply {
+            text = when (a) {
+                ScanLayout.AREA_TOP -> "Hàng nút phía trên: hiện ở mọi chế độ (Quét, Gõ phím, Clipboard)."
+                ScanLayout.AREA_BOTTOM -> "Hàng nút phía dưới: nằm dưới khung camera ở bảng Quét."
+                else -> "Nhóm Công cụ: bảng nổi phía trên bàn phím, mở khi bấm nút Công cụ."
+            }
+            textSize = 12f; setTextColor(col(R.color.accent)); setPadding(0, dp(10), 0, 0)
+        })
+
+        label(g, "SỐ NÚT VÀ KÍCH THƯỚC")
+        seekRow(g, if (tools) "Số nút tối đa mỗi hàng" else "Số nút mỗi hàng", 1, ScanLayout.MAX_PER_ROW, { st().perRow }, "") { v -> editStyle(a) { it.copy(perRow = v) } }
+        seekRow(g, "Chiều rộng nút", 32, 96, { st().widthDp }, "dp") { v -> editStyle(a) { it.copy(widthDp = v) } }
+        seekRow(g, "Chiều cao nút", 32, 96, { st().heightDp }, "dp") { v -> editStyle(a) { it.copy(heightDp = v) } }
+        seekRow(g, "Thu phóng của nhóm", 60, 160, { st().scale }, "%") { v -> editStyle(a) { it.copy(scale = v) } }
+        seekRow(g, "Bo góc nút", -1, 30, { st().cornerDp }, "dp", { v -> if (v < 0) "theo giao diện" else "$v dp" }) { v -> editStyle(a) { it.copy(cornerDp = v) } }
+        g.addView(TextView(this).apply {
+            text = "Kéo về 0 để nút vuông góc, tăng lên để bo tròn. Mức \"theo giao diện\" giữ bo góc của giao diện đang dùng."
+            textSize = 11f; setTextColor(col(R.color.muted)); setPadding(0, dp(2), 0, 0)
+        })
+
+        label(g, "KHOẢNG CÁCH GIỮA CÁC NÚT")
+        seekRow(g, "Khoảng cách ngang giữa các nút", 0, 24, { st().gapDp }, "dp") { v -> editStyle(a) { it.copy(gapDp = v) } }
+        seekRow(g, "Khoảng cách giữa các hàng nút", 0, 24, { st().rowGapDp }, "dp") { v -> editStyle(a) { it.copy(rowGapDp = v) } }
+
+        label(g, "VỊ TRÍ")
+        if (tools) {
+            g.addView(TextView(this).apply {
+                text = "Vị trí ngang của bảng nổi so với màn hình."; textSize = 11f; setTextColor(col(R.color.muted)); setPadding(0, dp(2), 0, 0)
+            })
+            chips(g, listOf("Sát trái", "Theo nút", "Sát phải", "Giữa"), { st().align }) { i -> editStyle(a) { it.copy(align = i) } }
+            seekRow(g, "Cách mép trên bàn phím", 0, 48, { st().padBottomDp }, "dp") { v -> editStyle(a) { it.copy(padBottomDp = v) } }
+        } else {
+            chips(g, listOf("Trái", "Giữa", "Phải", "Dàn đều", "Cách đều"), { st().align }) { i -> editStyle(a) { it.copy(align = i) } }
+            switchRow(g, "Căn theo cột (lưới)", "Bật: các nút thẳng cột với nhau giữa các hàng. Tắt: mỗi hàng tự căn riêng (Dàn đều / Cách đều chỉ có tác dụng khi tắt).",
+                { st().grid }) { on -> editStyle(a) { it.copy(grid = on) } }
+            if (a == ScanLayout.AREA_TOP) {
+                seekRow(g, "Cách phía trên hàng trên", 0, 48, { st().padTopDp }, "dp") { v -> editStyle(a) { it.copy(padTopDp = v) } }
+                seekRow(g, "Cách bàn phím / khung camera (phía dưới hàng trên)", 0, 48, { st().padBottomDp }, "dp") { v -> editStyle(a) { it.copy(padBottomDp = v) } }
+            } else {
+                seekRow(g, "Cách khung camera / bàn phím (phía trên hàng dưới)", 0, 48, { st().padTopDp }, "dp") { v -> editStyle(a) { it.copy(padTopDp = v) } }
+                seekRow(g, "Cách mép dưới (phía dưới hàng dưới)", 0, 48, { st().padBottomDp }, "dp") { v -> editStyle(a) { it.copy(padBottomDp = v) } }
+            }
+        }
+        seekRow(g, "Dịch ngang", -80, 80, { st().offsetXDp }, "dp", { v -> if (v == 0) "giữa" else if (v < 0) "trái ${-v} dp" else "phải $v dp" }) { v -> editStyle(a) { it.copy(offsetXDp = v) } }
+
+        g.addView(button("ĐẶT LẠI NHÓM NÀY VỀ MẶC ĐỊNH", false) {
+            cfg = cfg.withStyle(a, when (a) {
+                ScanLayout.AREA_TOP -> ScanLayout.DEFAULT_TOP_STYLE
+                ScanLayout.AREA_BOTTOM -> ScanLayout.DEFAULT_BOTTOM_STYLE
+                else -> ScanLayout.DEFAULT_TOOLS_STYLE
+            })
+            changed()
+            rebuildAreaBox()
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)).apply { topMargin = dp(16) })
     }
 
     /** Xem trước cập nhật ngay mỗi khi có thay đổi (gộp nhiều thay đổi trong cùng một khung hình). */
@@ -288,18 +360,29 @@ class ButtonLayoutActivity : Activity() {
     private fun renderPreview() {
         previewHost.removeAllViews()
         val dm = resources.displayMetrics
-        val budget = (dm.heightPixels * (if (previewBig) 0.6f else 0.38f)).toInt()
-        val opts = KbPreview.Opts(
-            scan = true, type = false, toolsOpen = true,
-            onPick = { k -> selected = k; refreshList(); refreshPicker(); refreshEditor() },
-            maxHeightPx = budget
-        )
-        val v = KbPreview.build(this, opts, cfg, theme, dm.widthPixels)
-        previewHost.addView(v, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        // Khung xem trước có chiều cao CỐ ĐỊNH: không nhảy khi thay đổi thông số, không đẩy vùng điều chỉnh bên dưới
+        val frameH = (dm.heightPixels * (if (previewBig) 0.45f else 0.30f)).toInt()
+        try {
+            val opts = KbPreview.Opts(
+                scan = true, type = false, toolsOpen = true,
+                onPick = { k -> selected = k; scroll.keepScroll { refreshList(); refreshPicker(); refreshEditor() } },
+                maxHeightPx = frameH, frameHeightPx = frameH, fixedScale = previewScale,
+                onScale = { previewScale = it }
+            )
+            val v = KbPreview.build(this, opts, cfg, theme, dm.widthPixels)
+            previewHost.addView(v, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, frameH))
+        } catch (e: Throwable) {
+            previewHost.addView(TextView(this).apply {
+                text = "Không dựng được khung xem trước: ${e.message ?: "lỗi không xác định"}"
+                textSize = 12f; setTextColor(col(R.color.muted)); setPadding(dp(16), dp(8), dp(16), dp(8))
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, frameH))
+        }
     }
 
     // ------------------------------------------------------------------ danh sách nút + kéo thả + chuyển khu vực
-    private fun refreshList() {
+    private fun refreshList() { scroll.keepScroll { refreshListImpl() } }
+
+    private fun refreshListImpl() {
         for (a in 0..2) {
             val box = areaBoxes[a] ?: continue
             box.removeAllViews()
@@ -370,7 +453,9 @@ class ButtonLayoutActivity : Activity() {
     }
 
     /** Bảng chọn trực tiếp từng nút để chỉnh: gom theo ba khu vực, mỗi ô là đúng hình nút thật. */
-    private fun refreshPicker() {
+    private fun refreshPicker() { scroll.keepScroll { refreshPickerImpl() } }
+
+    private fun refreshPickerImpl() {
         if (!::pickerBox.isInitialized) return
         pickerBox.removeAllViews()
         val perRow = 4
@@ -454,7 +539,9 @@ class ButtonLayoutActivity : Activity() {
     }
 
     // ------------------------------------------------------------------ chỉnh riêng từng nút
-    private fun refreshEditor() {
+    private fun refreshEditor() { scroll.keepScroll { refreshEditorImpl() } }
+
+    private fun refreshEditorImpl() {
         editorBox.removeAllViews()
         val key = selected
         val c = cfg.cfg(key)
