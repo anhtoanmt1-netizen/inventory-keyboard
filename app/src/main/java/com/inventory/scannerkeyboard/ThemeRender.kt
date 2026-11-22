@@ -24,14 +24,11 @@ import android.graphics.drawable.RippleDrawable
 import android.graphics.drawable.StateListDrawable
 import android.os.Build
 import android.view.Gravity
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
-import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.Space
 import android.widget.TextView
 import java.io.File
 import kotlin.math.abs
@@ -338,153 +335,5 @@ object ThemeRender {
         lp.width = if (pct >= 100 && !capped) ViewGroup.LayoutParams.MATCH_PARENT else w
         lp.gravity = when (align) { 0 -> Gravity.START; 2 -> Gravity.END; else -> Gravity.CENTER_HORIZONTAL }
         lp.bottomMargin = (st.layoutBottom * d).toInt()
-    }
-
-    // ------------------------------------------------------------------ khu vực xem trước
-    private fun dp(ctx: Context, v: Int) = (v * ctx.resources.displayMetrics.density).toInt()
-
-    private fun previewKey(ctx: Context, st: PanelStyle, label: String?, icon: Int, kind: Kind, weight: Float): View {
-        val v: View
-        if (icon != 0) {
-            v = ImageView(ctx).apply {
-                setImageResource(icon)
-                scaleType = ImageView.ScaleType.FIT_CENTER
-                setPadding(dp(ctx, 9), dp(ctx, 9), dp(ctx, 9), dp(ctx, 9))
-                styleIcon(this, st)
-            }
-        } else {
-            v = TextView(ctx).apply {
-                text = label ?: ""
-                gravity = Gravity.CENTER
-                textSize = (if ((label?.length ?: 0) > 1) 12f else 16f) * st.fontScale / 100f
-                styleText(this, st)
-            }
-        }
-        v.background = keyBg(ctx, st, kind)
-        elevate(v, st)
-        val m = dp(ctx, st.gapDp)
-        v.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, weight).apply { setMargins(m, 0, m, 0) }
-        return v
-    }
-
-    /** Phím Space trong khung xem trước: đúng kiểu riêng của phím Space (nền, ảnh, chữ). */
-    private fun previewSpace(ctx: Context, st: PanelStyle, sp: SpaceStyle): View {
-        val tv = TextView(ctx).apply {
-            gravity = Gravity.CENTER
-            setSingleLine()
-            textSize = 12f * st.fontScale / 100f
-            styleText(this, st)
-            SpaceRender.styleLabel(this, st, sp, true)
-            background = SpaceRender.background(ctx, st, sp)
-        }
-        elevate(tv, SpaceRender.shapeStyle(st, sp))
-        val m = dp(ctx, st.gapDp)
-        tv.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, sp.weight / 10f).apply { setMargins(m, 0, m, 0) }
-        return tv
-    }
-
-    /** Gắn lớp hiệu ứng (ánh sáng chạy liên tục) vào khung xem trước và cho phép chạm thử vào các phím. */
-    private fun attachFx(box: ViewGroup, st: PanelStyle, keys: List<View>) {
-        val fx = FxDrawable(box) { keys }
-        fx.style = st
-        fx.attach()
-        for (k in keys) {
-            k.setOnTouchListener { v, e ->
-                when (e.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> fx.down(v, e.x, e.y)
-                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> fx.up(v)
-                }
-                true
-            }
-        }
-    }
-
-    private fun collectKeys(box: ViewGroup): List<View> {
-        val out = ArrayList<View>()
-        for (i in 0 until box.childCount) {
-            val row = box.getChildAt(i) as? ViewGroup ?: continue
-            for (j in 0 until row.childCount) {
-                val c = row.getChildAt(j)
-                if (c is TextView || c is ImageView) out.add(c)
-            }
-        }
-        return out
-    }
-
-    /** Mô phỏng bảng Bàn phím (3 hàng phím chữ + hàng dưới) với đúng kiểu đang chỉnh. */
-    fun previewKeyboard(ctx: Context, st: PanelStyle, rowDp: Int, space: SpaceStyle = SpaceStyle()): View {
-        val box = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            clipChildren = false
-            clipToPadding = false
-            setPadding(dp(ctx, 2), dp(ctx, 4), dp(ctx, 2), dp(ctx, 4))
-            background = panelBackground(ctx, st)
-        }
-        fun row(): LinearLayout = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            clipChildren = false
-            clipToPadding = false
-            setPadding(0, dp(ctx, st.gapDp * 2 / 3), 0, dp(ctx, st.gapDp * 2 / 3))
-            box.addView(this, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ctx, rowDp)))
-        }
-        val r1 = row()
-        "qwertyuiop".forEach { r1.addView(previewKey(ctx, st, it.toString(), 0, Kind.NORMAL, 1f)) }
-        val r2 = row()
-        r2.addView(Space(ctx), LinearLayout.LayoutParams(0, 1, 0.5f))
-        "asdfghjkl".forEach { r2.addView(previewKey(ctx, st, it.toString(), 0, Kind.NORMAL, 1f)) }
-        r2.addView(Space(ctx), LinearLayout.LayoutParams(0, 1, 0.5f))
-        val r3 = row()
-        r3.addView(previewKey(ctx, st, null, R.drawable.ic_shift, Kind.SPECIAL, 1.5f))
-        "zxcvbnm".forEach { r3.addView(previewKey(ctx, st, it.toString(), 0, Kind.NORMAL, 1f)) }
-        r3.addView(previewKey(ctx, st, null, R.drawable.ic_backspace, Kind.SPECIAL, 1.5f))
-        val r4 = row()
-        r4.addView(previewKey(ctx, st, "?123", 0, Kind.SPECIAL, 1.5f))
-        r4.addView(previewKey(ctx, st, "VN", 0, Kind.SPECIAL, 1.2f))
-        r4.addView(previewKey(ctx, st, ",", 0, Kind.NORMAL, 1f))
-        r4.addView(previewSpace(ctx, st, space))
-        r4.addView(previewKey(ctx, st, ".", 0, Kind.NORMAL, 1f))
-        r4.addView(previewKey(ctx, st, null, R.drawable.ic_enter, Kind.ACCENT, 1.5f))
-        attachFx(box, st, collectKeys(box))
-        return box
-    }
-
-    /** Mô phỏng bảng Scan: khung camera + dòng trạng thái + hàng nút chức năng. */
-    fun previewScan(ctx: Context, st: PanelStyle): View {
-        val box = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            clipChildren = false
-            clipToPadding = false
-            setPadding(dp(ctx, 6), dp(ctx, 6), dp(ctx, 6), dp(ctx, 6))
-            background = panelBackground(ctx, st)
-        }
-        val cam = FrameLayout(ctx).apply { setBackgroundResource(R.drawable.bg_camera) }
-        cam.addView(TextView(ctx).apply {
-            text = "Đang quét… đưa mã vào khung"
-            textSize = 11f * st.fontScale / 100f
-            setPadding(dp(ctx, 10), dp(ctx, 4), dp(ctx, 10), dp(ctx, 4))
-            setBackgroundResource(R.drawable.bg_pill)
-            styleText(this, st)
-        }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
-        box.addView(cam, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ctx, 50)))
-        val row = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            clipChildren = false
-            clipToPadding = false
-        }
-        for (key in ScanLayout.DEFAULT_BOTTOM) {
-            val iv = ImageView(ctx).apply {
-                setImageResource(ScanLayout.ICONS[key] ?: R.drawable.ic_tune)
-                scaleType = ImageView.ScaleType.FIT_CENTER
-                setPadding(dp(ctx, 11), dp(ctx, 11), dp(ctx, 11), dp(ctx, 11))
-            }
-            styleButton(ctx, iv, st, if (ScanLayout.isToggle(key)) Kind.TOGGLE else Kind.NORMAL, false)
-            row.addView(iv, LinearLayout.LayoutParams(dp(ctx, 44), dp(ctx, 44)).apply { setMargins(dp(ctx, 3), 0, dp(ctx, 3), 0) })
-        }
-        box.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(ctx, 6) })
-        val btns = ArrayList<View>()
-        for (i in 0 until row.childCount) btns.add(row.getChildAt(i))
-        attachFx(box, st, btns)
-        return box
     }
 }

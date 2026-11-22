@@ -9,37 +9,6 @@
         <item name="android:textColorPrimary">@color/text</item>
     </style>
 
-    <!-- Nút / phím trên bàn phím -->
-    <style name="KbBtn">
-        <item name="android:background">@drawable/bg_key_special</item>
-        <item name="android:textColor">@color/text</item>
-        <item name="android:textSize">13sp</item>
-        <item name="android:textStyle">bold</item>
-        <item name="android:gravity">center</item>
-        <item name="android:clickable">true</item>
-        <item name="android:singleLine">true</item>
-    </style>
-    <style name="KbToggle" parent="KbBtn">
-        <item name="android:background">@drawable/bg_toggle</item>
-    </style>
-    <!-- Nút biểu tượng: kích thước icon luôn 24dp, nền theo trạng thái -->
-    <style name="KbIcon">
-        <item name="android:background">@drawable/bg_key</item>
-        <item name="android:tint">@color/icon_tint</item>
-        <item name="android:scaleType">fitCenter</item>
-        <item name="android:padding">11dp</item>
-        <item name="android:clickable">true</item>
-    </style>
-    <style name="KbIconToggle" parent="KbIcon">
-        <item name="android:background">@drawable/bg_toggle</item>
-    </style>
-    <style name="KbChip" parent="KbToggle">
-        <item name="android:textSize">11sp</item>
-    </style>
-    <style name="KbTab" parent="KbToggle">
-        <item name="android:textSize">14sp</item>
-    </style>
-
     <!-- Màn hình cài đặt -->
     <style name="SectionTitle">
         <item name="android:textColor">@color/accent</item>

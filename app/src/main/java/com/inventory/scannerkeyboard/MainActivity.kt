@@ -207,6 +207,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        autoSaveHandler.removeCallbacks(autoSaveRunnable)
         keySound?.release()
         super.onDestroy()
     }
@@ -249,19 +250,27 @@ class MainActivity : Activity() {
                 host.visibility = View.GONE
                 btn.text = "XEM HƯỚNG DẪN CÓ HÌNH MINH HỌA"
             } else {
-                if (host.childCount == 0) GuidePanel.build(this, host)
+                if (host.childCount == 0) { GuidePanel.build(this, host); guideSig = currentGuideSig() }
                 host.visibility = View.VISIBLE
                 btn.text = "THU GỌN HƯỚNG DẪN"
             }
         }
     }
 
-    /** Quay lại từ màn tùy chỉnh: dựng lại hình minh họa để luôn khớp giao diện và bố cục mới. */
+    /** Dấu hiệu giao diện + bố cục hiện tại: hình minh họa chỉ dựng lại khi dấu hiệu này đổi. */
+    private var guideSig = ""
+    private fun currentGuideSig(): String = Prefs(this).scanLayoutJson + "|" + ThemeStore.raw(this) + "|" + Prefs(this).keyRowDp
+
+    /** Quay lại từ màn tùy chỉnh: chỉ dựng lại hình minh họa NẾU giao diện / bố cục đã đổi (không dựng lại vô ích, không làm trang nhảy). */
     private fun refreshGuide() {
         val host = findViewById<LinearLayout>(R.id.guideHost) ?: return
         if (host.childCount == 0) return
-        host.removeAllViews()
-        if (host.visibility == View.VISIBLE) GuidePanel.build(this, host)
+        val sig = currentGuideSig()
+        if (sig == guideSig) return
+        findViewById<StableScrollView>(R.id.mainScroll).keepScroll {
+            host.removeAllViews()
+            if (host.visibility == View.VISIBLE) { GuidePanel.build(this, host); guideSig = sig }
+        }
     }
 
     override fun onResume() {

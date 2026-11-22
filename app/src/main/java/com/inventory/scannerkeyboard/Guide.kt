@@ -330,7 +330,10 @@ private class GuideBuilder(private val a: Activity, private val host: LinearLayo
                 "• ?123 / ABC: đổi giữa chữ và ký hiệu.\n" +
                 "• Phím Enter màu nổi: xuống dòng hoặc thực hiện.",
             null,
-            ThemeRender.previewKeyboard(a, kbSt, 28, space),
+            KbSimView(a).also {
+                it.showType(kbSt, space, KbMetrics.rowHeightPx(a, Prefs(a), kbSt))
+                it.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(154))
+            },
             fill = true
         )
         item(
@@ -487,7 +490,7 @@ private class GuideBuilder(private val a: Activity, private val host: LinearLayo
             "Tùy chỉnh nút Scan",
             "• Ba khu vực: Hàng trên, Hàng dưới và Công cụ. Kéo ≡ để đổi thứ tự, bấm ⇄ để chuyển nút sang khu vực khác.\n" +
                 "• Hàng trên, Hàng dưới, Nhóm Công cụ có bộ thông số riêng, độc lập nhau: số nút mỗi hàng (tối đa 10), kích thước, bo góc, khoảng cách, căn lề, vị trí.\n" +
-                "• Khung xem trước được ghim cố định phía trên và đồng bộ ngay khi chỉnh; nó dựng bằng chính mã của bàn phím thật nên khớp 100% khi áp dụng.\n" +
+                "• Khung xem trước là bản mô phỏng nhẹ, ghim cố định phía trên và cập nhật ngay khi chỉnh (hiệu ứng ánh sáng, chuyển động chỉ chạy trên bàn phím thật).\n" +
                 "• Mọi thay đổi tự lưu và áp dụng ngay cho bàn phím.\n" +
                 "• Chạm một nút ở mục Chỉnh sửa nút để thêm hình ảnh PNG riêng cho nút đó.",
             null,

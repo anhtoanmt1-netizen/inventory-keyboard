@@ -7,7 +7,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.media.ExifInterface
 import android.net.Uri
 import android.os.Bundle
@@ -19,9 +18,6 @@ import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.SeekBar
-import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.ContextCompat
@@ -41,10 +37,9 @@ class ThemeActivity : Activity() {
 
     private var panel = 0   // bảng đang chỉnh: 0 bảng Scan, 1 bảng Bàn phím. Hai bảng độc lập hoàn toàn
     private lateinit var scroll: StableScrollView
-    private var previewScale = 0f   // tỉ lệ thu nhỏ của xem trước, giữ cố định giữa các lần dựng
     private var group = 0    // 0 phím, 1 nền, 2 chữ, 3 chạm, 4 ánh sáng, 5 chuyển động nền, 6 bố cục, 7 phím Space
 
-    private lateinit var previewHost: LinearLayout
+    private lateinit var sim: KbSimView   // khung xem trước mô phỏng (nhẹ, kích thước cố định)
     private lateinit var listBox: LinearLayout
     private lateinit var tabsBox: LinearLayout
     private lateinit var editorBox: LinearLayout
@@ -100,15 +95,19 @@ class ThemeActivity : Activity() {
             text = "Tùy chỉnh giao diện"; textSize = 20f; setTextColor(col(R.color.text)); setTypeface(null, Typeface.BOLD)
         })
         head.addView(TextView(this).apply {
-            text = "Thay đổi được lưu, xem trước và áp dụng cho bàn phím ngay (xem trước dựng bằng chính mã của bàn phím thật)."
+            text = "Thay đổi được lưu, xem trước và áp dụng cho bàn phím ngay."
             textSize = 12f; setTextColor(col(R.color.muted)); setPadding(0, dp(2), 0, 0)
         })
         root.addView(head)
         Fonts.apply(head)
 
-        // Xem trước luôn nằm trên cùng, không cuộn theo
-        previewHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(col(R.color.bg)) }
-        root.addView(previewHost, lp(MATCH, WRAP))
+        // Xem trước MÔ PHỎNG luôn nằm trên cùng, không cuộn theo, chiều cao cố định
+        root.addView(TextView(this).apply {
+            text = "XEM TRƯỚC (mô phỏng)"; textSize = 11f; setTextColor(col(R.color.accent))
+            setTypeface(null, Typeface.BOLD); letterSpacing = 0.05f; setPadding(dp(16), dp(6), dp(16), dp(4))
+        }, lp(MATCH, WRAP))
+        sim = KbSimView(this)
+        root.addView(sim, lp(MATCH, minOf(dp(240), (resources.displayMetrics.heightPixels * 0.36f).toInt())))
 
         val sv = StableScrollView(this).apply { isFillViewport = true }
         scroll = sv
@@ -132,7 +131,6 @@ class ThemeActivity : Activity() {
         chips(ed, listOf("BẢNG SCAN", "BẢNG BÀN PHÍM"), 2, { panel }) {
             panel = it
             if (panel == 0 && group == 7) group = 0      // phím Space chỉ thuộc bảng Bàn phím
-            previewScale = 0f
             rebuildEditor()
             refreshPreview()
         }
@@ -228,21 +226,8 @@ class ThemeActivity : Activity() {
         seekGeneric(parent, title, min, max, unit, { get(viewStyle()) }) { v -> edit { s -> set(s, v) } }
 
     /** Dòng chọn màu: bấm ô màu để mở bảng chọn màu, kéo là xem trước ngay. */
-    private fun colorRow(parent: LinearLayout, title: String, withAlpha: Boolean, get: (PanelStyle) -> Int, set: (PanelStyle, Int) -> PanelStyle) {
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        row.addView(TextView(this).apply { text = title; textSize = 14f; setTextColor(col(R.color.text)); setTypeface(null, Typeface.BOLD) }, lp(0, WRAP).apply { weight = 1f })
-        val sw = View(this)
-        fun paint() {
-            sw.background = GradientDrawable().apply { setColor(get(viewStyle())); cornerRadius = dp(8).toFloat(); setStroke(dp(1), 0x66FFFFFF) }
-        }
-        paint()
-        sw.isClickable = true
-        sw.setOnClickListener {
-            ColorPickerDialog.show(this, title, get(viewStyle()), withAlpha) { c -> edit { s -> set(s, c) }; paint() }
-        }
-        row.addView(sw, lp(dp(56), dp(34)))
-        parent.addView(row, lp(MATCH, WRAP).apply { topMargin = dp(14) })
-    }
+    private fun colorRow(parent: LinearLayout, title: String, withAlpha: Boolean, get: (PanelStyle) -> Int, set: (PanelStyle, Int) -> PanelStyle) =
+        colorPick(parent, title, withAlpha, { get(viewStyle()) }) { c -> edit { s -> set(s, c) } }
 
     // ------------------------------------------------------------------ cập nhật
     private fun refreshAll() {
@@ -251,47 +236,19 @@ class ThemeActivity : Activity() {
         refreshPreview()
     }
 
-    private var previewBig = false
-    private var previewPending = false
-
-    /** Xem trước cập nhật ngay mỗi khi có thay đổi (gộp nhiều thay đổi trong cùng một khung hình). */
+    /** Vẽ lại khung xem trước mô phỏng theo giá trị đang chỉnh (chỉ vẽ lại, không dựng lại giao diện nên không bao giờ nhảy khung). */
     private fun refreshPreview() {
-        if (previewPending) return
-        previewPending = true
-        previewHost.post { previewPending = false; renderPreview() }
-    }
-
-    /**
-     * Xem trước dựng bằng chính mã của bàn phím thật (nút, phím, phím Space, nền, bố cục, khoảng cách, hiệu ứng) ở bề rộng
-     * thật rồi thu nhỏ đều, nên mọi giá trị đang chỉnh hiện đúng như khi áp dụng lên bàn phím.
-     */
-    private fun renderPreview() {
-        previewHost.removeAllViews()
         val t = cur()
-        val dm = resources.displayMetrics
-        val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(16), 0, dp(16), dp(4)) }
-        bar.addView(TextView(this).apply {
-            text = "XEM TRƯỚC · khớp bàn phím thật"; textSize = 11f; setTextColor(col(R.color.accent))
-            setTypeface(null, Typeface.BOLD); letterSpacing = 0.05f
-        }, lp(0, WRAP).apply { weight = 1f })
-        bar.addView(TextView(this).apply {
-            text = if (previewBig) "THU NHỎ" else "PHÓNG TO"; textSize = 10f; setTextColor(col(R.color.text)); setTypeface(null, Typeface.BOLD)
-            setBackgroundResource(R.drawable.bg_toggle); setPadding(dp(10), dp(5), dp(10), dp(5)); isClickable = true
-            setOnClickListener { previewBig = !previewBig; previewScale = 0f; refreshPreview() }
-        })
-        previewHost.addView(bar)
-        // Khung xem trước có chiều cao CỐ ĐỊNH: không nhảy khi thay đổi thông số
-        val frameH = (dm.heightPixels * (if (previewBig) 0.45f else 0.30f)).toInt()
-        val opts = KbPreview.Opts(
-            scan = panel == 0, type = panel == 1,
-            maxHeightPx = frameH, frameHeightPx = frameH, fixedScale = previewScale,
-            onScale = { previewScale = it }
-        )
-        val v = KbPreview.build(this, opts, ScanLayout.fromJson(prefs.scanLayoutJson), t, dm.widthPixels)
-        previewHost.addView(v, lp(MATCH, frameH))
+        if (panel == 0) {
+            sim.showScan(ScanLayout.fromJson(prefs.scanLayoutJson), t.scan, null, false)
+        } else {
+            sim.showType(t.kb, t.space, KbMetrics.rowHeightPx(this, prefs, t.kb))
+        }
     }
 
-    private fun refreshList() {
+    private fun refreshList() { scroll.keepScroll { refreshListImpl() } }
+
+    private fun refreshListImpl() {
         listBox.removeAllViews()
         tvActive.text = "Đang dùng: ${cur().name}"
         for (t in state.themes) {
@@ -441,20 +398,8 @@ class ThemeActivity : Activity() {
     }
 
     /** Hàng công tắc BẬT / TẮT có mô tả. rebuild = true thì dựng lại bảng chỉnh để hiện / ẩn các thông số đi kèm. */
-    private fun switchRow(parent: LinearLayout, title: String, desc: String, rebuild: Boolean, get: (PanelStyle) -> Boolean, set: (PanelStyle, Boolean) -> PanelStyle) {
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        texts.addView(TextView(this).apply { text = title; textSize = 14f; setTextColor(col(R.color.text)); setTypeface(null, Typeface.BOLD) })
-        if (desc.isNotEmpty()) texts.addView(TextView(this).apply { text = desc; textSize = 12f; setTextColor(col(R.color.muted)) })
-        row.addView(texts, lp(0, WRAP).apply { weight = 1f })
-        val sw = Switch(this).apply { isChecked = get(viewStyle()) }
-        sw.setOnCheckedChangeListener { _, on ->
-            edit { s -> set(s, on) }
-            if (rebuild) rebuildEditor()
-        }
-        row.addView(sw)
-        parent.addView(row, lp(MATCH, WRAP).apply { topMargin = dp(14) })
-    }
+    private fun switchRow(parent: LinearLayout, title: String, desc: String, rebuild: Boolean, get: (PanelStyle) -> Boolean, set: (PanelStyle, Boolean) -> PanelStyle) =
+        switchPick(parent, title, desc, rebuild, { get(viewStyle()) }) { on -> edit { s -> set(s, on) } }
 
     /** Công tắc cho một bit trong lightFx. */
     private fun lightSwitch(parent: LinearLayout, title: String, desc: String, bit: Int) =
@@ -464,7 +409,7 @@ class ThemeActivity : Activity() {
 
     // ------------------------------------------------------------------ Nhóm 4: hiệu ứng khi chạm và gõ
     private fun buildTouch(g: LinearLayout) {
-        note(g, "Mỗi hiệu ứng có công tắc riêng, bật bao nhiêu cũng được. Bạn có thể chạm thử vào các phím ở khung xem trước phía trên. Đang chỉnh: " + scopeName() + ".")
+        note(g, "Mỗi hiệu ứng có công tắc riêng, bật bao nhiêu cũng được. Hiệu ứng ánh sáng, chuyển động và chạm chỉ chạy trên bàn phím thật (khung xem trước phía trên là bản mô phỏng tĩnh). Đang chỉnh: " + scopeName() + ".")
         switchRow(g, "Nhún phím", "Phím co lại một chút khi chạm.", true, { it.fxBounce }) { s, on -> s.copy(fxBounce = on) }
         if (viewStyle().fxBounce) {
             seek(g, "Mức nhún", 80, 100, "%", { it.fxBounceScale }) { s, v -> s.copy(fxBounceScale = v) }
@@ -554,29 +499,11 @@ class ThemeActivity : Activity() {
 
     /** Dòng chọn màu cho một giá trị bất kỳ (không gắn với PanelStyle). */
     private fun colorPick(parent: LinearLayout, title: String, withAlpha: Boolean, get: () -> Int, set: (Int) -> Unit) {
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        row.addView(TextView(this).apply { text = title; textSize = 14f; setTextColor(col(R.color.text)); setTypeface(null, Typeface.BOLD) }, lp(0, WRAP).apply { weight = 1f })
-        val sw = View(this)
-        fun paint() {
-            sw.background = GradientDrawable().apply { setColor(get()); cornerRadius = dp(8).toFloat(); setStroke(dp(1), 0x66FFFFFF) }
-        }
-        paint()
-        sw.isClickable = true
-        sw.setOnClickListener { ColorPickerDialog.show(this, title, get(), withAlpha) { c -> set(c); paint() } }
-        row.addView(sw, lp(dp(56), dp(34)))
-        parent.addView(row, lp(MATCH, WRAP).apply { topMargin = dp(14) })
+        parent.addView(UiKit.colorRow(this, title, withAlpha, get, set), lp(MATCH, WRAP).apply { topMargin = dp(14) })
     }
 
     private fun switchPick(parent: LinearLayout, title: String, desc: String, rebuild: Boolean, get: () -> Boolean, set: (Boolean) -> Unit) {
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        texts.addView(TextView(this).apply { text = title; textSize = 14f; setTextColor(col(R.color.text)); setTypeface(null, Typeface.BOLD) })
-        if (desc.isNotEmpty()) texts.addView(TextView(this).apply { text = desc; textSize = 12f; setTextColor(col(R.color.muted)) })
-        row.addView(texts, lp(0, WRAP).apply { weight = 1f })
-        val sw = Switch(this).apply { isChecked = get() }
-        sw.setOnCheckedChangeListener { _, on -> set(on); if (rebuild) rebuildEditor() }
-        row.addView(sw)
-        parent.addView(row, lp(MATCH, WRAP).apply { topMargin = dp(14) })
+        parent.addView(UiKit.switchRow(this, title, desc, get) { on -> set(on); if (rebuild) rebuildEditor() }, lp(MATCH, WRAP).apply { topMargin = dp(14) })
     }
 
     private fun spaceSeek(g: LinearLayout, title: String, min: Int, max: Int, unit: String, get: (SpaceStyle) -> Int, set: (SpaceStyle, Int) -> SpaceStyle) =

@@ -448,20 +448,6 @@ object ScanButtons {
         return root
     }
 
-    /** Dựng nhóm Công cụ: một dải nút nằm ngang (cuộn ngang được nếu nhiều nút). */
-    fun buildStrip(ctx: Context, buttons: Map<String, ImageView>, keys: List<String>): LinearLayout {
-        val d = ctx.resources.displayMetrics.density
-        val strip = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        for (k in keys) {
-            val b = buttons[k] ?: continue
-            (b.parent as? ViewGroup)?.removeView(b)
-            strip.addView(b, LinearLayout.LayoutParams(b.layoutParams.width, b.layoutParams.height).apply {
-                setMargins((3 * d).toInt(), 0, (3 * d).toInt(), 0)
-            })
-        }
-        return strip
-    }
-
     /** Kiểu nút Scan của giao diện đang chọn (chưa áp bo góc riêng của từng khu vực). */
     fun themeScanStyle(ctx: Context): PanelStyle = ThemeStore.load(ctx).current()?.scan ?: PanelStyle()
 
@@ -573,6 +559,9 @@ object ScanButtons {
 
     fun makeAll(ctx: Context, lay: ScanLayout): Map<String, ImageView> =
         ScanLayout.KEYS.associateWith { makeButton(ctx, lay, it) }
+
+    /** Ảnh PNG riêng của nút (đã nạp, có bộ nhớ đệm). */
+    fun bitmapOf(ctx: Context, name: String): Bitmap? = loadBitmap(ctx, name)
 
     fun forgetBitmaps() = bitmapCache.clear()
 }

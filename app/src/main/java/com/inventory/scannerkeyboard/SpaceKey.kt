@@ -180,6 +180,9 @@ object SpaceRender {
 
     fun forget() = bitmaps.clear()
 
+    /** Ảnh của phím Space (đã nạp, có bộ nhớ đệm). */
+    fun bitmapOf(ctx: Context, name: String): Bitmap? = loadBitmap(ctx, name)
+
     private fun loadBitmap(ctx: Context, name: String): Bitmap? {
         bitmaps[name]?.let { return it }
         return try {

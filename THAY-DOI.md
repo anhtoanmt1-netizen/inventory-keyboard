@@ -39,7 +39,7 @@ và toàn bộ giá trị độ nhạy đều giữ nguyên từng dòng. Các f
   - Tùy chỉnh nút Scan tự động lưu (sau 0,35 giây hoặc khi thoát), không còn mất thay đổi nếu quên bấm Áp dụng.
   - Màn Cài đặt chính lưu ngay khi đổi công tắc hoặc ngừng gõ ô số (trước đây chỉ lưu khi thoát màn hình).
 
-## Đợt xem trước chính xác (bản 2.3)
+## Đợt xem trước chính xác (bản 2.3) - ĐÃ ĐƯỢC THAY THẾ ở bản 2.5 (xem bên dưới)
 - **Xem trước ghim cố định**: ở Tùy chỉnh nút Scan, khung xem trước nay nằm cố định phía trên, danh sách tùy chỉnh cuộn bên dưới (Tùy chỉnh giao diện vốn đã ghim). Có nút PHÓNG TO / THU NHỎ khung xem trước.
 - **Đồng bộ tức thì**: mỗi thay đổi cập nhật xem trước ngay trong cùng khung hình (gộp nhiều thay đổi liên tiếp khi kéo thanh trượt).
 - **Khớp 100% với bàn phím thật**: trước đây xem trước là bản vẽ lại gần giống nên lệch (hàng phím bị giới hạn 44dp, thiếu hàng số, khung camera 50dp, hàng dưới mặc định...). Nay bản xem trước dùng đúng:
@@ -60,7 +60,18 @@ và toàn bộ giá trị độ nhạy đều giữ nguyên từng dòng. Các f
    - Vùng điều chỉnh dùng ScrollView ổn định: không tự cuộn / trượt lên khi dựng lại nội dung hay khi thanh trượt nhận tiêu điểm; mọi lần dựng lại đều giữ nguyên vị trí cuộn.
    - Nếu dựng xem trước gặp lỗi, khung vẫn giữ chỗ và báo lý do thay vì biến mất.
 3. **Bố cục chung tách thành 3 nhóm độc lập**: Hàng trên, Hàng dưới, Nhóm Công cụ, mỗi nhóm một bộ thông số riêng: số nút mỗi hàng (tối đa 10), chiều rộng / cao, thu phóng, bo góc, khoảng cách ngang, khoảng cách giữa các hàng, căn lề, căn theo cột (hàng trên / dưới), khoảng cách phía trên và phía dưới, dịch ngang; riêng Nhóm Công cụ có vị trí ngang (sát trái / theo nút / sát phải / giữa) và khoảng cách tới mép trên bàn phím. Có nút đặt lại riêng từng nhóm. Cài đặt bố cục cũ được tự chuyển sang bộ thông số mới, giao diện giữ nguyên.
-4. Bàn phím thật và khung xem trước vẫn dùng chung mã dựng nên khớp 100% với ba bộ thông số mới (kể cả vị trí bảng Công cụ nổi).
+4. (Đã thay ở 2.5: khung xem trước nay là bản mô phỏng nhẹ.)
+
+## Bản 2.5: xem trước mô phỏng nhẹ + rà soát tổng thể mã
+**Xem trước** (Tùy chỉnh nút Scan và Tùy chỉnh giao diện)
+- Bỏ khung xem trước "khớp bàn phím thật" (mỗi lần chỉnh phải dựng lại cả layout bàn phím, dễ gây nhảy / giật). Thay bằng `KbSimView` (file `KbSim.kt`): MỘT View vẽ trực tiếp bằng Canvas theo đúng giá trị đang chỉnh (màu, bo góc, viền, khoảng cách, số nút mỗi hàng, căn lề, dịch ngang, bảng Công cụ nổi, phím Space riêng...). Kích thước khung CỐ ĐỊNH, đổi giá trị chỉ vẽ lại.
+- Bỏ nút PHÓNG TO / THU NHỎ. Tỉ lệ vẽ cố định theo từng bảng (không đổi khi chỉnh).
+- Hiệu ứng ánh sáng / chuyển động / chạm không có trong bản mô phỏng; chỉ chạy trên bàn phím thật.
+- Chạm một nút trong mô phỏng Scan vẫn chọn nút đó để chỉnh.
+
+**Mã đã gỡ (không còn dùng)**: `KbPreview`, `ScaledBox`, toàn bộ khối xem trước cũ của `ThemeRender` (`previewKeyboard`, `previewScan`, `previewKey`, `previewSpace`, `attachFx`...), `ScanButtons.buildStrip`, `ButtonLayoutActivity.areaNames`; 24 dòng import thừa; tài nguyên không dùng: nhóm style `Kb*` (6 style), màu `success`, `ic_check.xml`, `ic_trash.xml`.
+**Gộp mã lặp**: 7 hàm dựng dòng màu / công tắc giống nhau ở ThemeActivity, DevOptions, ButtonLayoutActivity nay dùng chung `UiKit` (trong `Widgets.kt`).
+**Ổn định / rò rỉ**: ScrollView ổn định (`StableScrollView`) cho cả màn Cài đặt chính; hướng dẫn nhanh chỉ dựng lại khi giao diện / bố cục thật sự đổi (trước đây dựng lại mỗi lần quay về màn hình, làm trang nhảy); danh sách giao diện giữ vị trí cuộn khi dựng lại; gỡ bộ hẹn giờ khi đóng màn hình (Cài đặt chính, Tùy chỉnh nút Scan, Xuất / Nhập); dừng lặp phím Xóa khi bàn phím ẩn.
 
 ## Lưu ý
 - Hàng trên có thêm nút Clipboard (danh sách yêu cầu không nhắc, nhưng bỏ đi sẽ mất chức năng hiện có).

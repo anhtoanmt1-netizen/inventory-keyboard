@@ -12,7 +12,6 @@ import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.Switch
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 
@@ -106,25 +105,11 @@ private class DevPanel(private val a: Activity, private val host: LinearLayout, 
     }
 
     private fun colorPick(title: String, withAlpha: Boolean, get: () -> Int, set: (Int) -> Unit) {
-        val row = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        row.addView(TextView(a).apply { text = title; textSize = 14f; setTextColor(col(R.color.text)); setTypeface(null, Typeface.BOLD) }, lp(0, WRAP).apply { weight = 1f })
-        val sw = View(a)
-        fun paint() { sw.background = GradientDrawable().apply { setColor(get()); cornerRadius = dp(8).toFloat(); setStroke(dp(1), 0x66FFFFFF) } }
-        paint()
-        sw.isClickable = true
-        sw.setOnClickListener { ColorPickerDialog.show(a, title, get(), withAlpha) { c -> set(c); paint() } }
-        row.addView(sw, lp(dp(56), dp(34)))
-        card.addView(row, lp(MATCH, WRAP).apply { topMargin = dp(14) })
+        card.addView(UiKit.colorRow(a, title, withAlpha, get, set), lp(MATCH, WRAP).apply { topMargin = dp(14) })
     }
 
     private fun switchRow(title: String, desc: String, get: () -> Boolean, set: (Boolean) -> Unit) {
-        val row = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        val texts = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
-        texts.addView(TextView(a).apply { text = title; textSize = 14f; setTextColor(col(R.color.text)); setTypeface(null, Typeface.BOLD) })
-        if (desc.isNotEmpty()) texts.addView(TextView(a).apply { text = desc; textSize = 12f; setTextColor(col(R.color.muted)) })
-        row.addView(texts, lp(0, WRAP).apply { weight = 1f })
-        row.addView(Switch(a).apply { isChecked = get(); setOnCheckedChangeListener { _, on -> set(on) } })
-        card.addView(row, lp(MATCH, WRAP).apply { topMargin = dp(14) })
+        card.addView(UiKit.switchRow(a, title, desc, get, set), lp(MATCH, WRAP).apply { topMargin = dp(14) })
     }
 
     // ------------------------------------------------------------------ dựng bảng

@@ -53,6 +53,11 @@ class TransferActivity : Activity() {
         setContentView(buildUi())
     }
 
+    override fun onDestroy() {
+        main.removeCallbacksAndMessages(null)
+        super.onDestroy()
+    }
+
     // ------------------------------------------------------------------ giao diện
     private fun buildUi(): View {
         val sv = ScrollView(this).apply { setBackgroundColor(col(R.color.bg)); isFillViewport = true }

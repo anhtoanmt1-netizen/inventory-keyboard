@@ -19,12 +19,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
-import android.widget.HorizontalScrollView
-import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.SeekBar
-import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.ContextCompat
@@ -46,7 +41,7 @@ class ButtonLayoutActivity : Activity() {
     private var selected: String = "tools"
     private var pickKey: String? = null
 
-    private lateinit var previewHost: LinearLayout
+    private lateinit var sim: KbSimView          // khung xem trước mô phỏng (nhẹ, kích thước cố định)
     private val areaBoxes = arrayOfNulls<LinearLayout>(3)
     private lateinit var editorBox: LinearLayout
     private lateinit var pickerBox: LinearLayout
@@ -56,9 +51,6 @@ class ButtonLayoutActivity : Activity() {
     private lateinit var scroll: StableScrollView
     private lateinit var areaBox: LinearLayout
     private var areaTab = 0                 // khu vực đang chỉnh bố cục: 0 hàng trên, 1 hàng dưới, 2 nhóm Công cụ
-    private var previewScale = 0f           // tỉ lệ thu nhỏ của xem trước, giữ cố định giữa các lần dựng
-    private var previewBig = false
-    private var previewPending = false
     private var theme: KbTheme? = null
     private val d by lazy { resources.displayMetrics.density }
     private fun dp(v: Int) = (v * d).toInt()
@@ -96,25 +88,23 @@ class ButtonLayoutActivity : Activity() {
             setTypeface(null, android.graphics.Typeface.BOLD)
         }
 
-        // --- Xem trước: GHIM cố định phía trên (không cuộn theo), dựng bằng chính mã của bàn phím thật ---
+        // --- Xem trước MÔ PHỎNG: ghim cố định phía trên, chiều cao không đổi ---
         pinned = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setBackgroundColor(col(R.color.bg))
             setPadding(0, dp(6), 0, dp(6))
         }
         val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(16), 0, dp(16), dp(4)) }
         bar.addView(TextView(this).apply {
-            text = "XEM TRƯỚC · khớp bàn phím thật"; textSize = 11f; setTextColor(col(R.color.accent))
+            text = "XEM TRƯỚC (mô phỏng)"; textSize = 11f; setTextColor(col(R.color.accent))
             setTypeface(null, android.graphics.Typeface.BOLD); letterSpacing = 0.05f
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        bar.addView(tvDirty, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = dp(10) })
-        bar.addView(TextView(this).apply {
-            text = "PHÓNG TO"; textSize = 10f; setTextColor(col(R.color.text)); setTypeface(null, android.graphics.Typeface.BOLD)
-            setBackgroundResource(R.drawable.bg_toggle); setPadding(dp(10), dp(5), dp(10), dp(5)); isClickable = true
-            setOnClickListener { previewBig = !previewBig; previewScale = 0f; text = if (previewBig) "THU NHỎ" else "PHÓNG TO"; refreshPreview() }
-        })
+        bar.addView(tvDirty, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         pinned.addView(bar)
-        previewHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(col(R.color.bg)) }
-        pinned.addView(previewHost, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        sim = KbSimView(this).apply {
+            onPick = { k -> selected = k; refreshList(); refreshPicker(); refreshEditor(); refreshPreview() }
+        }
+        val frameH = minOf(dp(240), (resources.displayMetrics.heightPixels * 0.36f).toInt())
+        pinned.addView(sim, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, frameH))
 
         // --- Bố cục và vị trí: ba nhóm độc lập (mỗi nhóm một bộ thông số riêng) ---
         val g = card(root, "BỐ CỤC VÀ VỊ TRÍ")
@@ -255,6 +245,11 @@ class ButtonLayoutActivity : Activity() {
         super.onPause()
     }
 
+    override fun onDestroy() {
+        saveHandler.removeCallbacksAndMessages(null)
+        super.onDestroy()
+    }
+
     /** Kiểu nút dùng cho xem trước và danh sách: giao diện đang dùng, kèm bo góc người dùng đang chọn. */
     /** Kiểu nút của giao diện đang dùng; bo góc riêng của từng khu vực được áp khi dựng từng nút. */
     private fun tileStyle(): PanelStyle = baseStyle
@@ -280,14 +275,8 @@ class ButtonLayoutActivity : Activity() {
     }
 
     private fun switchRow(parent: LinearLayout, title: String, desc: String, get: () -> Boolean, set: (Boolean) -> Unit) {
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        row.addView(LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(TextView(this@ButtonLayoutActivity).apply { text = title; textSize = 14f; setTextColor(col(R.color.text)); setTypeface(null, android.graphics.Typeface.BOLD) })
-            addView(TextView(this@ButtonLayoutActivity).apply { text = desc; textSize = 12f; setTextColor(col(R.color.muted)) })
-        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        row.addView(Switch(this).apply { isChecked = get(); setOnCheckedChangeListener { _, on -> set(on) } })
-        parent.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(12) })
+        parent.addView(UiKit.switchRow(this, title, desc, get, set),
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(12) })
     }
 
     /** Toàn bộ thông số bố cục và vị trí của MỘT khu vực; không ảnh hưởng hai khu vực còn lại. */
@@ -350,33 +339,9 @@ class ButtonLayoutActivity : Activity() {
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)).apply { topMargin = dp(16) })
     }
 
-    /** Xem trước cập nhật ngay mỗi khi có thay đổi (gộp nhiều thay đổi trong cùng một khung hình). */
+    /** Vẽ lại khung xem trước mô phỏng theo cấu hình hiện tại (chỉ vẽ lại, không dựng lại giao diện nên không bao giờ nhảy khung). */
     private fun refreshPreview() {
-        if (previewPending) return
-        previewPending = true
-        previewHost.post { previewPending = false; renderPreview() }
-    }
-
-    private fun renderPreview() {
-        previewHost.removeAllViews()
-        val dm = resources.displayMetrics
-        // Khung xem trước có chiều cao CỐ ĐỊNH: không nhảy khi thay đổi thông số, không đẩy vùng điều chỉnh bên dưới
-        val frameH = (dm.heightPixels * (if (previewBig) 0.45f else 0.30f)).toInt()
-        try {
-            val opts = KbPreview.Opts(
-                scan = true, type = false, toolsOpen = true,
-                onPick = { k -> selected = k; scroll.keepScroll { refreshList(); refreshPicker(); refreshEditor() } },
-                maxHeightPx = frameH, frameHeightPx = frameH, fixedScale = previewScale,
-                onScale = { previewScale = it }
-            )
-            val v = KbPreview.build(this, opts, cfg, theme, dm.widthPixels)
-            previewHost.addView(v, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, frameH))
-        } catch (e: Throwable) {
-            previewHost.addView(TextView(this).apply {
-                text = "Không dựng được khung xem trước: ${e.message ?: "lỗi không xác định"}"
-                textSize = 12f; setTextColor(col(R.color.muted)); setPadding(dp(16), dp(8), dp(16), dp(8))
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, frameH))
-        }
+        sim.showScan(cfg, baseStyle, selected, true)
     }
 
     // ------------------------------------------------------------------ danh sách nút + kéo thả + chuyển khu vực
@@ -412,7 +377,7 @@ class ButtonLayoutActivity : Activity() {
             cornerRadius = dp(12).toFloat(); setColor(col(R.color.surface2)); setStroke(dp(2), col(R.color.accent))
         }
         card.isClickable = true
-        card.setOnClickListener { selected = key; refreshList(); refreshPicker(); refreshEditor() }
+        card.setOnClickListener { selected = key; refreshList(); refreshPicker(); refreshEditor(); refreshPreview() }
         outer.addView(card, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         areaRows[area].add(outer)
         attachDrag(handle, area, idx)
@@ -431,8 +396,6 @@ class ButtonLayoutActivity : Activity() {
         cfg = cfg.withList(area, o)
         refreshList(); changed()
     }
-
-    private val areaNames = listOf("Hàng trên", "Hàng dưới (bảng Scan)", "Nhóm Công cụ")
 
     /** Chuyển một nút sang khu vực khác. Nút Công cụ không thể nằm trong chính nhóm Công cụ. */
     private fun showMoveMenu(key: String) {
@@ -480,7 +443,7 @@ class ButtonLayoutActivity : Activity() {
                             setStroke(dp(if (k == selected) 2 else 1), if (k == selected) col(R.color.accent) else col(R.color.stroke))
                         }
                         isClickable = true
-                        setOnClickListener { selected = k; refreshList(); refreshPicker(); refreshEditor() }
+                        setOnClickListener { selected = k; refreshList(); refreshPicker(); refreshEditor(); refreshPreview() }
                     }
                     cell.addView(ScanButtons.tile(this, cfg, k, 42, tileStyle()), LinearLayout.LayoutParams(dp(42), dp(42)))
                     cell.addView(TextView(this).apply {

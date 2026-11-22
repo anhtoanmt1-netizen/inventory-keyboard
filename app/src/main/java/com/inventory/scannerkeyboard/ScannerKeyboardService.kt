@@ -17,8 +17,6 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.os.VibrationEffect
-import android.os.Vibrator
 import android.util.Size
 import android.view.Gravity
 import android.view.KeyEvent
@@ -30,7 +28,6 @@ import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
 import android.view.inputmethod.InputMethodManager
 import android.widget.FrameLayout
-import android.widget.HorizontalScrollView
 import android.widget.PopupWindow
 import android.widget.Toast
 import androidx.core.content.FileProvider
@@ -39,7 +36,6 @@ import androidx.core.view.inputmethod.InputConnectionCompat
 import androidx.core.view.inputmethod.InputContentInfoCompat
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.Space
 import android.widget.TextView
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
@@ -1016,6 +1012,7 @@ class ScannerKeyboardService : InputMethodService(), LifecycleOwner {
     override fun onWindowHidden() {
         super.onWindowHidden()
         windowVisible = false
+        handler.removeCallbacks(repeatRunnable)   // đang giữ phím Xóa mà bàn phím ẩn đi thì dừng lặp
         telex.reset()
         if (::toolsBox.isInitialized) { flyoutOpen = false; toolsMode = 0; toolsBox.animate().cancel(); hideToolsPanel() }
         clipViewer?.dismiss()

@@ -1,6 +1,8 @@
 package com.inventory.scannerkeyboard
 
+import android.app.Activity
 import android.content.Context
+import android.graphics.drawable.GradientDrawable
 import android.graphics.Rect
 import android.graphics.Typeface
 import android.os.Handler
@@ -8,11 +10,13 @@ import android.os.Looper
 import android.os.SystemClock
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.SeekBar
+import android.widget.Switch
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 
@@ -170,7 +174,11 @@ class SeekRow(
  * ScrollView ổn định cho màn hình tùy chỉnh: không tự cuộn / nhảy lên khi nội dung được dựng lại hoặc khi một ô
  * (thanh trượt, nút) nhận tiêu điểm. Chỉ cuộn theo thao tác của người dùng (và khi đang gõ vào ô nhập).
  */
-class StableScrollView(ctx: android.content.Context) : ScrollView(ctx) {
+class StableScrollView @JvmOverloads constructor(
+    ctx: android.content.Context,
+    attrs: android.util.AttributeSet? = null,
+    defStyleAttr: Int = 0
+) : ScrollView(ctx, attrs, defStyleAttr) {
     override fun computeScrollDeltaToGetChildRectOnScreen(rect: Rect): Int =
         if (findFocus() is EditText) super.computeScrollDeltaToGetChildRectOnScreen(rect) else 0
 
@@ -188,5 +196,42 @@ class StableScrollView(ctx: android.content.Context) : ScrollView(ctx) {
                 return true
             }
         })
+    }
+}
+
+
+/** Các dòng điều khiển dùng chung cho mọi màn hình tùy chỉnh (trước đây lặp lại ở nhiều file). */
+object UiKit {
+    /** Dòng chọn màu: tên bên trái, ô màu bên phải; chạm để mở bảng chọn màu. */
+    fun colorRow(a: Activity, title: String, withAlpha: Boolean, get: () -> Int, set: (Int) -> Unit): LinearLayout {
+        val d = a.resources.displayMetrics.density
+        val row = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        row.addView(TextView(a).apply {
+            text = title; textSize = 14f; setTextColor(ContextCompat.getColor(a, R.color.text)); setTypeface(null, Typeface.BOLD)
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        val sw = View(a)
+        fun paint() {
+            sw.background = GradientDrawable().apply { setColor(get()); cornerRadius = 8 * d; setStroke(d.toInt().coerceAtLeast(1), 0x66FFFFFF) }
+        }
+        paint()
+        sw.isClickable = true
+        sw.setOnClickListener { ColorPickerDialog.show(a, title, get(), withAlpha) { c -> set(c); paint() } }
+        row.addView(sw, LinearLayout.LayoutParams((56 * d).toInt(), (34 * d).toInt()))
+        return row
+    }
+
+    /** Dòng công tắc: tên (và mô tả nếu có) bên trái, công tắc bên phải. */
+    fun switchRow(ctx: Context, title: String, desc: String, get: () -> Boolean, set: (Boolean) -> Unit): LinearLayout {
+        val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val texts = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+        texts.addView(TextView(ctx).apply {
+            text = title; textSize = 14f; setTextColor(ContextCompat.getColor(ctx, R.color.text)); setTypeface(null, Typeface.BOLD)
+        })
+        if (desc.isNotEmpty()) texts.addView(TextView(ctx).apply {
+            text = desc; textSize = 12f; setTextColor(ContextCompat.getColor(ctx, R.color.muted))
+        })
+        row.addView(texts, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(Switch(ctx).apply { isChecked = get(); setOnCheckedChangeListener { _, on -> set(on) } })
+        return row
     }
 }
