@@ -73,6 +73,18 @@ và toàn bộ giá trị độ nhạy đều giữ nguyên từng dòng. Các f
 **Gộp mã lặp**: 7 hàm dựng dòng màu / công tắc giống nhau ở ThemeActivity, DevOptions, ButtonLayoutActivity nay dùng chung `UiKit` (trong `Widgets.kt`).
 **Ổn định / rò rỉ**: ScrollView ổn định (`StableScrollView`) cho cả màn Cài đặt chính; hướng dẫn nhanh chỉ dựng lại khi giao diện / bố cục thật sự đổi (trước đây dựng lại mỗi lần quay về màn hình, làm trang nhảy); danh sách giao diện giữ vị trí cuộn khi dựng lại; gỡ bộ hẹn giờ khi đóng màn hình (Cài đặt chính, Tùy chỉnh nút Scan, Xuất / Nhập); dừng lặp phím Xóa khi bàn phím ẩn.
 
+## Bản 2.6: bảng chọn màu theo đặc tả `bảng_màu.txt`
+Mọi bảng chọn màu trong ứng dụng (Giao diện: phím, nền, chữ, viền, ánh sáng...; Tùy chọn nhà phát triển) đều đi qua một hộp thoại duy nhất `ColorPickerDialog.show(...)`, nên được dựng lại ở đúng một chỗ (`ColorPickerDialog.kt`). Chữ ký hàm, cách gọi và hành vi Hủy / Chọn / xem trước trực tiếp giữ nguyên.
+- **Bố cục**: thẻ rộng 284dp, bo 20dp, đệm 14dp; ô Bão hòa - Độ sáng cao 140dp bo 12dp; thanh Sắc độ cao 14dp bo 7dp; hàng dưới gồm chip xem trước 44x32dp, ô HEX và 4 màu mẫu tròn 21dp (#FF5A5F, #FFB020, #16C784, #2F80ED).
+- **Tay cầm tròn 22dp** (viền trắng 3dp, viền mờ, bóng đổ): phình 1,28 lần khi nhấn (450 ms), chạm chỗ khác hoặc đổi từ HEX / màu mẫu thì lướt có độ nảy (550 ms); đang kéo (xa hơn 3dp) thì bám sát ngón tay. Các đường cong lò xo là đúng giá trị trong đặc tả: (.34, 1.45, .5, 1), (.34, 1.9, .5, 1), (.34, 1.8, .5, 1).
+- **Chip xem trước**: chữ "Aa" tự đổi trắng / đen (#16151B) theo độ tương phản WCAG, chuyển màu 250 ms.
+- **Ô HEX**: dấu # cố định bên trái, nhận 3 hoặc 6 chữ số (có hoặc không có #); gõ đủ 6 chữ số là cập nhật ngay; Enter hoặc rời ô thì chốt; mã sai thì ô rung 380 ms, viền đỏ và trả về màu hiện tại; khi lấy nét có viền màu nhấn và vòng sáng 3dp. Giữ nguyên sắc độ khi chọn màu xám / đen.
+- **Màu mẫu**: nhún khi nhấn (0,9 lần, thả ra nảy 400 ms); màu đang chọn có vòng viền hiện ra (mờ dần 200 ms, nảy 400 ms).
+- **Bàn phím / trợ năng**: phím mũi tên di chuyển tay cầm, giữ Shift đi 10 bước, Home / End về hai đầu; có mô tả và giá trị cho trình đọc màn hình (TalkBack có thể tăng / giảm Sắc độ và Độ trong suốt).
+- **Giảm hiệu ứng**: nếu hệ thống tắt hoạt ảnh (thang thời lượng = 0) thì mọi chuyển động bị bỏ, giá trị đổi tức thì.
+- **Giữ lại**: thanh Độ trong suốt (chỉ hiện khi chỗ gọi cần, cùng kiểu thanh Sắc độ), ô HEX nhận thêm AARRGGBB khi có độ trong suốt, rung nhẹ khi giá trị đổi, `askNumber(...)`.
+- **Khác biệt so với đặc tả (do là ứng dụng Android)**: bỏ phần CSS / HTML; ứng dụng chỉ có bảng màu tối nên dùng giá trị của giao diện tối (nền thẻ = surface2, nền ô HEX = surface, chữ = text, mờ = muted, nhấn = accent); hiệu ứng "rê chuột phóng 1,15" không có trên cảm ứng; bảng 18 màu có sẵn trước đây được thay bằng 4 màu mẫu như đặc tả.
+
 ## Lưu ý
 - Hàng trên có thêm nút Clipboard (danh sách yêu cầu không nhắc, nhưng bỏ đi sẽ mất chức năng hiện có).
 - Phiên bản này chưa được biên dịch hay chạy thử trong môi trường soạn thảo (không có Android SDK). Hãy build bằng GitHub Actions và thử các mục ở trên.
